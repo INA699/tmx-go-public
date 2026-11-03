@@ -1,0 +1,17 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "tmxg",
+  "outputfilename": "tmxg",
+  "frontend:dir": "ui",
+  "frontend:install": "pnpm install",
+  "frontend:build": "pnpm build",
+  "frontend:dev:watcher": "pnpm dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "blackcode"
+  },
+  "info": {
+    "productName": "tmxg",
+    "comments": "Runs a tree of coding agents on this machine."
+  }
+}

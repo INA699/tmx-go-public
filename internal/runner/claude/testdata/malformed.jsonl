@@ -1,0 +1,14 @@
+not json at all
+{"type":"assistant","message":{"content":[{"type":"text","text":"cut off
+{"type":"assistant","message":null}
+{"type":"assistant","message":{"content":"a plain string"}}
+{"type":"assistant","message":{"content":[{"type":"image","source":{}},{"type":"thinking","thinking":"weighing options"}]}}
+{"type":"user","message":{"role":"user","content":"echoed user text"}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t2","is_error":true,"content":[{"type":"text","text":"line one"},{"type":"image","source":{}},{"type":"text","text":"line two"}]}]},"parent_tool_use_id":"toolu_parent"}
+{"type":"stream_event","event":{"type":"content_block_delta"}}
+{"type":"control_request","request_id":"hook-1","request":{"subtype":"hook_callback","callback_id":"x"}}
+{"type":"control_request","request_id":"perm-9","request":{"subtype":"can_use_tool","tool_name":"Write"}}
+{"type":"control_cancel_request","request_id":"perm-9"}
+{"type":"result","subtype":"error_max_turns","is_error":true,"session_id":"sid-2"}
+[]
+42

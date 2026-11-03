@@ -1,0 +1,387 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  tmx design tokens. Neutral palette, one restrained accent (--brand, a quiet blue), hairline
+  borders. State colours are used only for small indicators, never for large surfaces.
+*/
+:root {
+  --radius: 0.5rem;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.18 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0 0);
+  --primary: oklch(0.2 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.965 0 0);
+  --secondary-foreground: oklch(0.2 0 0);
+  --muted: oklch(0.965 0 0);
+  --muted-foreground: oklch(0.5 0 0);
+  --subtle-foreground: oklch(0.62 0 0);
+  --accent: oklch(0.955 0 0);
+  --accent-foreground: oklch(0.2 0 0);
+  --destructive: oklch(0.56 0.2 25);
+  --border: oklch(0.915 0 0);
+  --border-strong: oklch(0.86 0 0);
+  --input: oklch(0.89 0 0);
+  --ring: oklch(0.56 0.14 258 / 0.55);
+
+  --brand: oklch(0.53 0.15 258);
+  --brand-foreground: oklch(0.99 0 0);
+  --brand-soft: oklch(0.53 0.15 258 / 0.09);
+
+  --state-working: oklch(0.56 0.15 258);
+  --state-waiting: oklch(0.72 0.16 70);
+  --state-error: oklch(0.58 0.21 25);
+  --state-idle: oklch(0.7 0 0);
+  --state-stopped: oklch(0.7 0 0);
+  --state-ok: oklch(0.6 0.13 155);
+
+  --diff-add-bg: oklch(0.6 0.15 150 / 0.1);
+  --diff-add-fg: oklch(0.42 0.12 150);
+  --diff-del-bg: oklch(0.6 0.2 25 / 0.09);
+  --diff-del-fg: oklch(0.48 0.17 25);
+
+  --sidebar: oklch(0.982 0 0);
+  --sidebar-foreground: oklch(0.25 0 0);
+  --sidebar-accent: oklch(0.94 0 0);
+  --sidebar-accent-foreground: oklch(0.18 0 0);
+  --sidebar-border: oklch(0.915 0 0);
+
+  --code-bg: oklch(0.975 0 0);
+  --bubble: oklch(0.955 0 0);
+
+  color-scheme: light;
+}
+
+.dark {
+  --background: oklch(0.172 0 0);
+  --foreground: oklch(0.93 0 0);
+  --card: oklch(0.198 0 0);
+  --card-foreground: oklch(0.93 0 0);
+  --popover: oklch(0.21 0 0);
+  --popover-foreground: oklch(0.93 0 0);
+  --primary: oklch(0.93 0 0);
+  --primary-foreground: oklch(0.18 0 0);
+  --secondary: oklch(0.245 0 0);
+  --secondary-foreground: oklch(0.93 0 0);
+  --muted: oklch(0.23 0 0);
+  --muted-foreground: oklch(0.66 0 0);
+  --subtle-foreground: oklch(0.54 0 0);
+  --accent: oklch(0.245 0 0);
+  --accent-foreground: oklch(0.95 0 0);
+  --destructive: oklch(0.65 0.19 25);
+  --border: oklch(1 0 0 / 0.085);
+  --border-strong: oklch(1 0 0 / 0.14);
+  --input: oklch(1 0 0 / 0.12);
+  --ring: oklch(0.7 0.13 258 / 0.6);
+
+  --brand: oklch(0.7 0.13 258);
+  --brand-foreground: oklch(0.16 0 0);
+  --brand-soft: oklch(0.7 0.13 258 / 0.12);
+
+  --state-working: oklch(0.7 0.13 258);
+  --state-waiting: oklch(0.8 0.14 75);
+  --state-error: oklch(0.68 0.19 25);
+  --state-idle: oklch(0.52 0 0);
+  --state-stopped: oklch(0.5 0 0);
+  --state-ok: oklch(0.72 0.13 155);
+
+  --diff-add-bg: oklch(0.7 0.15 150 / 0.12);
+  --diff-add-fg: oklch(0.8 0.12 150);
+  --diff-del-bg: oklch(0.65 0.2 25 / 0.13);
+  --diff-del-fg: oklch(0.78 0.13 25);
+
+  --sidebar: oklch(0.152 0 0);
+  --sidebar-foreground: oklch(0.86 0 0);
+  --sidebar-accent: oklch(0.225 0 0);
+  --sidebar-accent-foreground: oklch(0.96 0 0);
+  --sidebar-border: oklch(1 0 0 / 0.07);
+
+  --code-bg: oklch(0.155 0 0);
+  --bubble: oklch(0.245 0 0);
+
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* Dense type scale: 13px body, 11.5px meta. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.71875rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;
+  --text-base--line-height: 1.375rem;
+  --text-lg: 1rem;
+  --text-lg--line-height: 1.5rem;
+  --text-xl: 1.1875rem;
+  --text-xl--line-height: 1.625rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+
+  --radius-sm: calc(var(--radius) - 3px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-soft: var(--brand-soft);
+  --color-state-working: var(--state-working);
+  --color-state-waiting: var(--state-waiting);
+  --color-state-error: var(--state-error);
+  --color-state-idle: var(--state-idle);
+  --color-state-stopped: var(--state-stopped);
+  --color-state-ok: var(--state-ok);
+  --color-diff-add-bg: var(--diff-add-bg);
+  --color-diff-add-fg: var(--diff-add-fg);
+  --color-diff-del-bg: var(--diff-del-bg);
+  --color-diff-del-fg: var(--diff-del-fg);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-code: var(--code-bg);
+  --color-bubble: var(--bubble);
+
+  --animate-pulse-dot: pulse-dot 1.6s ease-in-out infinite;
+  @keyframes pulse-dot {
+    0%,
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.45;
+      transform: scale(0.82);
+    }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans text-sm antialiased;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+  }
+  ::selection {
+    background: var(--brand-soft);
+  }
+  .dark ::selection {
+    background: oklch(0.7 0.13 258 / 0.3);
+  }
+  code,
+  kbd,
+  pre,
+  .font-mono {
+    font-feature-settings: "liga" 0, "calt" 0;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: default;
+  }
+}
+
+/* Wails: drag the window by the sidebar header; controls inside stay clickable. */
+.drag-region {
+  --wails-draggable: drag;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.drag-region button,
+.drag-region a,
+.drag-region input,
+.drag-region [role="button"] {
+  --wails-draggable: no-drag;
+}
+
+/* Thin, quiet scrollbars. */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.scroll-thin::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Shiki dual themes: light by default, dark under .dark. */
+.shiki,
+.shiki span {
+  background-color: transparent !important;
+}
+.dark .shiki,
+.dark .shiki span {
+  color: var(--shiki-dark) !important;
+}
+
+/* Markdown prose for assistant messages: compact and quiet. */
+.prose-tmx {
+  @apply text-sm leading-[1.6] text-foreground;
+  overflow-wrap: anywhere;
+}
+.prose-tmx > :first-child {
+  margin-top: 0;
+}
+.prose-tmx > :last-child {
+  margin-bottom: 0;
+}
+.prose-tmx p {
+  margin: 0.5rem 0;
+}
+.prose-tmx h1,
+.prose-tmx h2,
+.prose-tmx h3,
+.prose-tmx h4 {
+  @apply font-semibold tracking-tight text-foreground;
+  margin: 1rem 0 0.375rem;
+}
+.prose-tmx h1 {
+  @apply text-lg;
+}
+.prose-tmx h2 {
+  @apply text-base;
+}
+.prose-tmx h3,
+.prose-tmx h4 {
+  @apply text-sm;
+}
+.prose-tmx ul,
+.prose-tmx ol {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+.prose-tmx ul {
+  list-style: disc;
+}
+.prose-tmx ol {
+  list-style: decimal;
+}
+.prose-tmx li {
+  margin: 0.125rem 0;
+}
+.prose-tmx li::marker {
+  color: var(--subtle-foreground);
+}
+.prose-tmx a {
+  color: var(--brand);
+  text-underline-offset: 2px;
+}
+.prose-tmx a:hover {
+  text-decoration: underline;
+}
+.prose-tmx strong {
+  @apply font-semibold;
+}
+.prose-tmx blockquote {
+  @apply border-l-2 pl-3 text-muted-foreground;
+  margin: 0.5rem 0;
+}
+.prose-tmx hr {
+  @apply my-4 border-border;
+}
+.prose-tmx :not(pre) > code {
+  @apply rounded-[4px] border border-border bg-muted px-[0.3em] py-[0.05em] font-mono text-[0.88em];
+}
+.prose-tmx table {
+  @apply my-2 w-full border-collapse text-sm;
+  display: block;
+  overflow-x: auto;
+}
+.prose-tmx th,
+.prose-tmx td {
+  @apply border border-border px-2.5 py-1 text-left;
+}
+.prose-tmx th {
+  @apply bg-muted font-medium;
+}
+.prose-tmx input[type="checkbox"] {
+  margin-right: 0.375rem;
+  vertical-align: -1px;
+}
+
+/* xterm inside its card */
+.xterm-host .xterm {
+  padding: 10px 12px;
+  height: 100%;
+}
+.xterm-host .xterm-viewport {
+  background-color: transparent !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* @mentions in chat messages (lib/mentions.ts): a quiet pill; stronger when it is you. */
+.prose-tmx .mention {
+  border-radius: 0.3rem;
+  padding: 0 0.2rem;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 500;
+}
+.prose-tmx .mention-me {
+  background: var(--brand);
+  color: var(--brand-foreground);
+}

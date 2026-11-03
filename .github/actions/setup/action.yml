@@ -1,0 +1,19 @@
+name: Set up Go, Node and pnpm
+description: Go from go.mod and Node with pnpm. On GitHub's machines with caches (Go modules/build cache; pnpm store keyed on ui/pnpm-lock.yaml); a self-hosted runner keeps its own caches on disk.
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: go.mod
+        cache: ${{ runner.environment != 'self-hosted' }}
+        cache-dependency-path: go.sum
+    # ui/package.json has no packageManager field, so the version is pinned here (the one the lockfile was made with).
+    - uses: pnpm/action-setup@v4
+      with:
+        version: 12.14.0
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+        cache: ${{ runner.environment != 'self-hosted' && 'pnpm' || '' }}
+        cache-dependency-path: ui/pnpm-lock.yaml

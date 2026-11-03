@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>tiamatrix</title>
+  <rect width="1024" height="1024" rx="228" fill="#1B1F3B"/>
+  <g fill="none" stroke="#2DD4BF" stroke-width="30" stroke-linecap="round">
+    <path d="M512 600 Q300 520 240 330"/>
+    <path d="M512 600 Q400 420 370 210"/>
+    <path d="M512 600 Q512 400 512 170"/>
+    <path d="M512 600 Q624 420 654 210"/>
+    <path d="M512 600 Q724 520 784 330"/>
+    <path d="M512 600 Q512 760 400 840"/>
+  </g>
+  <g fill="#2DD4BF">
+    <circle cx="240" cy="330" r="42"/>
+    <circle cx="370" cy="210" r="42"/>
+    <circle cx="512" cy="170" r="42"/>
+    <circle cx="654" cy="210" r="42"/>
+    <circle cx="784" cy="330" r="42"/>
+  </g>
+  <circle cx="512" cy="600" r="80" fill="#F5B544"/>
+  <circle cx="512" cy="600" r="30" fill="#1B1F3B"/>
+</svg>

@@ -1,0 +1,60 @@
+# Posts the public CI result as commit status "public-ci" on the PRIVATE head commit.
+# Runs only for the mirror's own pushes to pr/** or fleet/main. Outside PRs are event "pull_request"
+# and are skipped by the `if`. workflow_run always runs the DEFAULT-branch (fleet/main) copy of this
+# file, and only the mirror deploy key may push there.
+#
+# Identity (tmx-lead, review #155): a dedicated GitHub App, never the reviewer's or the owner's
+# account. It is installed on blackcode-ch/tmx-go only, with the single permission "Commit statuses:
+# write", so it can't read code. The private repo's required check "public-ci" is bound to this App as
+# its expected source, so a "public-ci" status from any other account doesn't count. This job also
+# refuses if the token turns out to be the reviewer identity (FLEET_REVIEW_LOGIN) or isn't the App.
+name: report back
+on:
+  workflow_run:
+    workflows: [public CI]
+    types: [completed]
+permissions:
+  contents: read
+jobs:
+  status:
+    # Skipped (not red) until the App is configured: vars.PUBLIC_CI_APP_ID set on this repo.
+    if: >-
+      vars.PUBLIC_CI_APP_ID != '' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      (startsWith(github.event.workflow_run.head_branch, 'pr/') || github.event.workflow_run.head_branch == 'fleet/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: private SHA from the snapshot commit trailer
+        id: map
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          msg=$(gh api "repos/${{ github.repository }}/commits/$SHA" --jq .commit.message)
+          priv=$(grep -oE '^Private-Commit: [0-9a-f]{40}$' <<<"$msg" | cut -d' ' -f2)
+          [ -n "$priv" ] || { echo "no Private-Commit trailer"; exit 1; }
+          echo "sha=$priv" >> "$GITHUB_OUTPUT"
+      - name: App token (statuses only, private repo only)
+        id: app
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.PUBLIC_CI_APP_ID }}
+          private-key: ${{ secrets.PUBLIC_CI_APP_KEY }}
+          owner: blackcode-ch
+          repositories: tmx-go
+      - name: set status on the private commit
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          REVIEWER: ${{ vars.FLEET_REVIEW_LOGIN }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          [ -n "$REVIEWER" ] && [ -n "$APP_SLUG" ] || { echo "::error::FLEET_REVIEW_LOGIN and the App must be configured"; exit 1; }
+          [ "${APP_SLUG,,}" != "${REVIEWER,,}" ] || { echo "::error::the reporter must not be the reviewer identity"; exit 1; }
+          case "$CONCLUSION" in success) s=success;; cancelled|skipped) s=error;; *) s=failure;; esac
+          gh api -X POST "repos/blackcode-ch/tmx-go/statuses/${{ steps.map.outputs.sha }}" \
+            -f state="$s" -f context=public-ci -f target_url="$URL" \
+            -f description="public CI: $CONCLUSION" > /dev/null

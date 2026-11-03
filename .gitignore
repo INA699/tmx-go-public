@@ -1,0 +1,34 @@
+# Build output
+/bin/
+/dist/
+/build/*
+# The product icon's source stays in git (its PNG render too: see the *.png exceptions below).
+!/build/appicon.svg
+*.test
+/ui/node_modules/
+/ui/dist/*
+!/ui/dist/.keep
+/ui/wailsjs/
+/ui/test-results/
+
+# Screenshots show whatever the agents were working on; they stay out of git.
+/ui/screenshots/
+*.png
+*.PNG
+# Except the product icon: Wails makes the .icns/.ico from build/appicon.png (`make icon`).
+!/build/appicon.png
+!/ui/public/apple-touch-icon.png
+# And the README's hero screenshot (chosen by the owner to show as it is).
+!/docs/images/board.png
+
+# Agent transcripts and message archives are private (other projects, people).
+# Test recordings are fixtures and stay in git.
+*.jsonl
+!/internal/**/testdata/*.jsonl
+**/transcripts/
+
+# Local state and secrets never belong here (they live in the state dir).
+.env
+.env.*
+/secrets/
+.DS_Store
