@@ -1,0 +1,269 @@
+# Builds tmx's voice engine: whisper.cpp's whisper-cli, from the tag pinned in
+# internal/transcribe/engine.pin, as one self-contained executable per platform, and publishes them
+# with SHA256SUMS and the licenses as the pre-release whisper-engine-<tag>. UNSIGNED here: no key is
+# ever in this repository's CI. The release signer adds SHA256SUMS.sig afterwards, outside CI; tmx
+# installs accept the engine only with that signature (the fleet key, "extra" context, this repo).
+#
+# It runs when this file or the pin changes on fleet/main, or by hand. A release that already has
+# SHA256SUMS is never rebuilt (it may be signed); a new engine is a new pin. Never "Latest".
+name: whisper-engine
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [fleet/main]
+    paths:
+      - .github/workflows/whisper-engine.yml
+      - internal/transcribe/engine.pin
+
+permissions:
+  contents: read
+
+concurrency:
+  group: whisper-engine
+  cancel-in-progress: false
+
+env:
+  # The release files (keep in step with engineAsset in internal/transcribe/catalog.go).
+  ASSETS: >-
+    whisper-cli_darwin_arm64
+    whisper-cli_darwin_amd64
+    whisper-cli_linux_amd64
+    whisper-cli_linux_arm64
+    whisper-cli_windows_amd64.exe
+  # The smoke test's model (whisper.cpp's tiny, quantized; 32 MB), pinned like the catalog's.
+  TINY_URL: https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny-q5_1.bin
+  TINY_SHA256: 818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7
+  # The licenses shipped with the release, pinned: whisper.cpp (MIT) at the engine's commit comes
+  # from the pin; the Whisper model weights (OpenAI, MIT) at openai/whisper v20250625.
+  MODELS_LICENSE_URL: https://raw.githubusercontent.com/openai/whisper/31243bad24cc746f07d4c8bfdd2d974872cb1803/LICENSE
+
+jobs:
+  pin:
+    name: pin and what is published
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.pin.outputs.tag }}
+      commit: ${{ steps.pin.outputs.commit }}
+      release: ${{ steps.pin.outputs.release }}
+      needed: ${{ steps.have.outputs.needed }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          sparse-checkout: internal/transcribe/engine.pin
+          sparse-checkout-cone-mode: false
+      - id: pin
+        name: Read the pin
+        run: |
+          pin=internal/transcribe/engine.pin
+          tag=$(sed -n 's/^tag=//p' "$pin" | tr -d '[:space:]')
+          commit=$(sed -n 's/^commit=//p' "$pin" | tr -d '[:space:]')
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::engine.pin: bad tag '$tag'"; exit 1; }
+          [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::engine.pin: bad commit '$commit'"; exit 1; }
+          {
+            echo "tag=$tag"
+            echo "commit=$commit"
+            echo "release=whisper-engine-$tag"
+          } >> "$GITHUB_OUTPUT"
+      - id: have
+        name: Is it published already?
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ steps.pin.outputs.release }}
+        run: |
+          have=$(gh release view "$RELEASE" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>/dev/null || true)
+          if grep -qxF SHA256SUMS <<<"$have"; then
+            # Immutable once SHA256SUMS is up: the release may be signed (SHA256SUMS.sig is added
+            # by the release signer, never by CI), and rebuilding would void the signature. A new
+            # engine is a new pin, so a new release.
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$RELEASE already has SHA256SUMS; nothing to build (it is never rebuilt)"
+            exit 0
+          fi
+          echo "needed=true" >> "$GITHUB_OUTPUT"
+      - id: matrix
+        name: What this run builds
+        # GitHub's fresh hosted runners only (free on this public repository), every platform on
+        # every run. The files are checked by their signed SHA256SUMS, made outside CI.
+        run: |
+          m='{"asset":"whisper-cli_darwin_arm64","os":"macos-latest","cmake":"-DGGML_METAL=ON -DGGML_METAL_EMBED_LIBRARY=ON -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0"}'
+          m="$m"',{"asset":"whisper-cli_darwin_amd64","os":"macos-latest","cmake":"-DGGML_METAL=OFF -DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_BMI2=ON -DGGML_SSE42=ON"}'
+          m="$m"',{"asset":"whisper-cli_linux_amd64","os":"ubuntu-22.04","cmake":"-DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_BMI2=ON -DGGML_SSE42=ON \"-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc\""}'
+          m="$m"',{"asset":"whisper-cli_linux_arm64","os":"ubuntu-22.04-arm","cmake":"\"-DCMAKE_EXE_LINKER_FLAGS=-static-libstdc++ -static-libgcc\""}'
+          m="$m"',{"asset":"whisper-cli_windows_amd64.exe","os":"windows-2022","cmake":"-A x64 -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_FMA=ON -DGGML_F16C=ON -DGGML_BMI2=ON -DGGML_SSE42=ON"}'
+          echo "matrix={\"include\":[$m]}" >> "$GITHUB_OUTPUT"
+          echo "{\"include\":[$m]}" | python3 -m json.tool
+
+  build:
+    name: build (${{ matrix.asset }})
+    needs: pin
+    if: needs.pin.outputs.needed == 'true'
+    strategy:
+      fail-fast: false
+      # The platforms and their CMake flags: the pin job's "What this run builds" step.
+      matrix: ${{ fromJSON(needs.pin.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash # Git Bash on Windows
+    steps:
+      - name: Check out whisper.cpp ${{ needs.pin.outputs.tag }}
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/whisper.cpp
+          ref: ${{ needs.pin.outputs.tag }}
+          path: whisper.cpp
+          persist-credentials: false
+      - name: The tag is still the pinned commit
+        env:
+          WANT: ${{ needs.pin.outputs.commit }}
+        run: |
+          got=$(git -C whisper.cpp rev-parse HEAD)
+          [ "$got" = "$WANT" ] || { echo "::error::the tag now points at $got, engine.pin says $WANT"; exit 1; }
+      - name: Configure
+        # Always portable and self-contained: no -march=native (GGML_NATIVE=OFF), static libraries,
+        # no OpenMP (libgomp / vcomp140.dll); only whisper-cli is needed.
+        run: |
+          cmake -S whisper.cpp -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DGGML_NATIVE=OFF \
+            -DGGML_OPENMP=OFF \
+            -DGGML_CCACHE=OFF \
+            -DWHISPER_BUILD_IS_DEV=OFF \
+            -DWHISPER_BUILD_EXAMPLES=ON \
+            -DWHISPER_BUILD_TESTS=OFF \
+            -DWHISPER_BUILD_SERVER=OFF \
+            -DWHISPER_SDL2=OFF \
+            -DWHISPER_CURL=OFF \
+            ${{ matrix.cmake }}
+      - name: Build
+        run: cmake --build build --config Release --target whisper-cli -j 4
+      - name: Collect
+        env:
+          ASSET: ${{ matrix.asset }}
+        run: |
+          mkdir -p out
+          bin=$(find build/bin -type f \( -name whisper-cli -o -name whisper-cli.exe \) | head -n 1)
+          [ -n "$bin" ] || { echo "::error::no whisper-cli was built"; find build -name 'whisper-cli*'; exit 1; }
+          cp "$bin" "out/$ASSET"
+          if [ "$RUNNER_OS" = macOS ]; then
+            codesign --force --sign - "out/$ASSET" # ad hoc, like tmx itself
+          fi
+          ls -l out
+      - name: Self-contained?
+        env:
+          ASSET: ${{ matrix.asset }}
+        run: |
+          f="out/$ASSET"
+          case "$RUNNER_OS" in
+          Linux)
+            ldd "$f" || true
+            if ldd "$f" | grep -E 'libstdc\+\+|libgcc_s|libgomp|libwhisper|libggml'; then
+              echo "::error::$ASSET needs shared libraries that are not everywhere"; exit 1
+            fi
+            echo "needs glibc $(objdump -T "$f" | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -n 1)"
+            ;;
+          macOS)
+            otool -L "$f"
+            if otool -L "$f" | tail -n +2 | grep -vE '^\s+(/usr/lib/|/System/Library/)'; then
+              echo "::error::$ASSET links libraries outside the system"; exit 1
+            fi
+            vtool -show-build "$f" | grep -E 'minos|platform' || true
+            ;;
+          Windows)
+            vswhere="/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
+            dumpbin=$("$vswhere" -latest -products '*' -find 'VC/Tools/MSVC/**/bin/Hostx64/x64/dumpbin.exe' 2>/dev/null | head -n 1 | tr -d '\r')
+            if [ -z "$dumpbin" ]; then
+              echo "::warning::dumpbin not found; the DLL check is skipped"
+            else
+              deps=$("$dumpbin" -nologo -dependents "$f" | tr -d '\r')
+              echo "$deps"
+              # Only the DLL lines: the output also names the file itself (whisper-cli_…).
+              if grep -iE '^\s+\S+\.dll\s*$' <<<"$deps" | grep -iE 'vcruntime|msvcp|vcomp|ucrtbase|ggml|whisper'; then
+                echo "::error::$ASSET needs DLLs that are not part of Windows"; exit 1
+              fi
+            fi
+            ;;
+          esac
+      - name: Smoke test
+        env:
+          ASSET: ${{ matrix.asset }}
+          TAG: ${{ needs.pin.outputs.tag }}
+        run: |
+          # It runs from an empty folder (no DLLs or libraries beside it), says its version, and
+          # transcribes whisper.cpp's sample with the tiny model.
+          dir=$(mktemp -d)
+          cp "out/$ASSET" "$dir/"
+          run=("$dir/$ASSET")
+          if [ "$ASSET" = whisper-cli_darwin_amd64 ]; then
+            arch -x86_64 /usr/bin/true 2>/dev/null || softwareupdate --install-rosetta --agree-to-license >/dev/null 2>&1 || true
+            run=(arch -x86_64 "$dir/$ASSET")
+          fi
+          "${run[@]}" --help >/dev/null 2>&1 || { echo "::error::$ASSET --help fails"; "${run[@]}" --help; exit 1; }
+          version=$("${run[@]}" --version)
+          echo "$version"
+          grep -qF "whisper.cpp version: ${TAG#v}" <<<"$version" || { echo "::error::$ASSET says '$version'"; exit 1; }
+
+          curl -fsSL --retry 3 -o tiny.bin "$TINY_URL"
+          got=$( (sha256sum tiny.bin 2>/dev/null || shasum -a 256 tiny.bin) | cut -d' ' -f1)
+          [ "$got" = "$TINY_SHA256" ] || { echo "::error::the tiny model does not match its checksum"; exit 1; }
+          set +e
+          "${run[@]}" -m tiny.bin -f whisper.cpp/samples/jfk.wav -l en -t 2 -oj -of jfk -np
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ] && [ "$ASSET" = whisper-cli_darwin_amd64 ]; then
+            # Rosetta lacks some of the x86 instructions an Intel Mac has (AVX2 before macOS 15).
+            echo "::warning::$ASSET did not transcribe under Rosetta (exit $code); --version passed, the transcription is not checked here"
+            exit 0
+          fi
+          [ "$code" -eq 0 ] || { echo "::error::$ASSET failed to transcribe (exit $code)"; exit 1; }
+          cat jfk.json
+          tr -d '\r' < jfk.json | tr '[:upper:]' '[:lower:]' | grep -q 'ask not what your country can do for you' \
+            || { echo "::error::$ASSET transcribed jfk.wav wrongly"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: out/${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    name: publish ${{ needs.pin.outputs.release }} (unsigned)
+    needs: [pin, build]
+    # Only when every platform built: a partial release would be signed incomplete.
+    if: ${{ !cancelled() && needs.pin.outputs.needed == 'true' && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Licenses, SHA256SUMS and publish (no signature here)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ needs.pin.outputs.release }}
+          TAG: ${{ needs.pin.outputs.tag }}
+          COMMIT: ${{ needs.pin.outputs.commit }}
+        run: |
+          set -euo pipefail
+          cd dist
+          for a in $ASSETS; do [ -f "$a" ] || { echo "::error::$a was not built"; exit 1; }; done
+          chmod 755 whisper-cli_*
+          curl -fsSL --retry 3 -o LICENSE-whisper.cpp.txt "https://raw.githubusercontent.com/ggml-org/whisper.cpp/${COMMIT}/LICENSE"
+          curl -fsSL --retry 3 -o LICENSE-whisper-models.txt "$MODELS_LICENSE_URL"
+          grep -q '^MIT License' LICENSE-whisper.cpp.txt && grep -q '^MIT License' LICENSE-whisper-models.txt \
+            || { echo "::error::a license file is not the expected MIT text"; exit 1; }
+          # SHA256SUMS covers the engines and the licenses; the signature (added outside CI) covers it.
+          sha256sum -- whisper-cli_* LICENSE-*.txt > SHA256SUMS
+          cat SHA256SUMS
+          notes="The voice engine of tmx: whisper-cli from whisper.cpp ${TAG} (https://github.com/ggml-org/whisper.cpp/releases/tag/${TAG}, MIT; see LICENSE-whisper.cpp.txt), built by .github/workflows/whisper-engine.yml from ${GITHUB_SHA:0:7}. The Whisper models it runs are OpenAI's (MIT; LICENSE-whisper-models.txt). tmx accepts these files only with SHA256SUMS.sig, the release signer's signature, added after this run. Not a tmx release."
+          gh release create "$RELEASE" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title "Voice engine: whisper.cpp ${TAG}" --notes "$notes" -- whisper-cli_* LICENSE-*.txt SHA256SUMS
+          echo "::notice::published $RELEASE unsigned; the release signer adds SHA256SUMS.sig"
