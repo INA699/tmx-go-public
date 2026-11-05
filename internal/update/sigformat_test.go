@@ -21,7 +21,7 @@ import (
 
 const (
 	tRepo   = "o/r"
-	tTag    = "fleet-v1.2.3"
+	tTag    = "v1.2.3"
 	tRPID   = "tmx.example"
 	tOrigin = "https://tmx.example"
 )
@@ -126,7 +126,7 @@ func TestEd25519SignatureFormats(t *testing.T) {
 		{"CRLF and blank lines", "\r\n" + good(true) + "\r\n\r\n", nil},
 		{"unknown id next to a valid line", "fleet-release-v9:ed25519:" + strings.SplitN(good(true), ":", 3)[2] + "\n" + good(true), nil},
 		{"wrong key", edLine(other, FleetKeyID, FleetSignatureContext, tRepo, tTag, tSums, true), errUnsigned},
-		{"wrong tag", edLine(priv, FleetKeyID, FleetSignatureContext, tRepo, "fleet-v9.9.9", tSums, true), errUnsigned},
+		{"wrong tag", edLine(priv, FleetKeyID, FleetSignatureContext, tRepo, "v9.9.9", tSums, true), errUnsigned},
 		{"wrong repo", edLine(priv, FleetKeyID, FleetSignatureContext, "x/y", tTag, tSums, true), errUnsigned},
 		{"wrong context", edLine(priv, FleetKeyID, FleetExtraSignatureContext, tRepo, tTag, tSums, true), errUnsigned},
 		{"wrong sums", edLine(priv, FleetKeyID, FleetSignatureContext, tRepo, tTag, append(tSums, 'x'), true), errUnsigned},
@@ -134,7 +134,7 @@ func TestEd25519SignatureFormats(t *testing.T) {
 		{"unknown type", FleetKeyID + ":rsa:" + strings.SplitN(good(true), ":", 3)[2], errUnsigned},
 		{"type mismatch", FleetKeyID + ":webauthn:" + strings.SplitN(good(true), ":", 3)[2], errUnsigned},
 		{"empty file", "", errBadSig},
-		{"bare base64", strings.SplitN(good(true), ":", 3)[2], errBadSig},
+		{"bare base64 (the owner's format, by an extra key)", strings.SplitN(good(true), ":", 3)[2], errUnsigned},
 		{"too many fields", good(true) + ":x", errBadSig},
 		{"bad base64", FleetKeyID + ":ed25519:!!!", errBadSig},
 		{"short signature", FleetKeyID + ":ed25519:" + base64.StdEncoding.EncodeToString([]byte("short")), errBadSig},
@@ -267,10 +267,10 @@ func TestUpdaterReadsPinnedSet(t *testing.T) {
 func TestStageRefusesDowngrade(t *testing.T) {
 	_, pub := newKey(t)
 	for _, tc := range []struct{ current, release string }{
-		{"fleet-v1.2.3", "fleet-v1.2.3"},
-		{"fleet-v1.2.3", "fleet-v1.2.2"},
-		{"fleet-v1.2.3-4-gabcdef0", "fleet-v1.2.3"},
-		{"dev", "fleet-v1.2.3"},
+		{"v1.2.3", "v1.2.3"},
+		{"v1.2.3", "v1.2.2"},
+		{"v1.2.3-4-gabcdef0", "v1.2.3"},
+		{"dev", "v1.2.3"},
 	} {
 		u := &Updater{o: Options{Paths: config.Paths{Home: t.TempDir()}, Version: tc.current, Keys: []string{pub}}}
 		_, err := u.stage(context.Background(), target{path: "unused", goos: "linux", goarch: "amd64"}, release{TagName: tc.release}, tc.release)
@@ -289,7 +289,7 @@ func TestInvalidKeysFailClosed(t *testing.T) {
 		{FleetPublicKey: pub, Require: []string{"webauthn"}},
 		{FleetPublicKey: pub, Require: []string{"rsa"}},
 	} {
-		u := New(Options{Paths: config.Paths{Home: t.TempDir()}, Version: "fleet-v1.0.0", Executable: "tmx.exe", GOOS: "windows", GOARCH: "amd64",
+		u := New(Options{Paths: config.Paths{Home: t.TempDir()}, Version: "v1.0.0", Executable: "tmx.exe", GOOS: "windows", GOARCH: "amd64",
 			Settings: func() config.UpdateConfig { return cfg }})
 		st := u.Check(context.Background())
 		if st.State != StateOff || !strings.HasPrefix(st.Reason, "update keys invalid: ") {
@@ -299,11 +299,11 @@ func TestInvalidKeysFailClosed(t *testing.T) {
 		if _, err := u.VerifySums("whisper-engine-v1", tSums, []byte(sig)); err == nil || !strings.HasPrefix(err.Error(), "update keys invalid: ") {
 			t.Fatalf("%+v: VerifySums: %v", cfg, err)
 		}
-		if _, err := u.stage(context.Background(), target{path: "unused", goos: "windows", goarch: "amd64"}, release{TagName: "fleet-v2.0.0"}, "fleet-v2.0.0"); err == nil || !strings.HasPrefix(err.Error(), "update keys invalid: ") {
+		if _, err := u.stage(context.Background(), target{path: "unused", goos: "windows", goarch: "amd64"}, release{TagName: "v2.0.0"}, "v2.0.0"); err == nil || !strings.HasPrefix(err.Error(), "update keys invalid: ") {
 			t.Fatalf("%+v: stage: %v", cfg, err)
 		}
 	}
-	u := New(Options{Paths: config.Paths{Home: t.TempDir()}, Version: "fleet-v1.0.0", Executable: "tmx.exe", GOOS: "windows", GOARCH: "amd64",
+	u := New(Options{Paths: config.Paths{Home: t.TempDir()}, Version: "v1.0.0", Executable: "tmx.exe", GOOS: "windows", GOARCH: "amd64",
 		Settings: func() config.UpdateConfig { return config.UpdateConfig{FleetPublicKey: pub} }})
 	if st := u.Status(); st.State == StateOff {
 		t.Fatalf("valid set turned updates off: %q", st.Reason)

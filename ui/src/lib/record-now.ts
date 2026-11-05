@@ -1,4 +1,4 @@
-// ONE Record button (the owner, 2 Nov 17:22 / 3 Nov 00:31: "I gesticulate and highlight on screen"): one tap
+// ONE Record button (the owner points and highlights on screen while talking): one tap
 // records what this device can give, with no choice to make first. A computer: its screen (the OS picker),
 // with the camera drawn in the corner (rec-bubble.ts, Chromium), the microphone and the device's own sound.
 // A phone (no screen capture): the camera and the microphone. The macOS app: its native capture. A part the

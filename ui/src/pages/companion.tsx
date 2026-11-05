@@ -38,7 +38,7 @@ function dayLabel(ms: number): string {
 function who(e: CompanionEntry): string {
   if (e.from === "owner") return "you";
   if (e.from === "companion") return "Companion";
-  if (e.from === "tmx") return "tmx";
+  if (e.from === "tmx") return "Tiamatrix";
   return e.agent_name || (e.from === "head" ? "the head" : "an agent");
 }
 
@@ -586,7 +586,7 @@ export function CompanionPage() {
   if (available === false) {
     return (
       <div className="flex flex-1 items-center justify-center p-6">
-        <EmptyState icon={Sparkles} title="This tmx can't talk with Companion yet" className="w-full max-w-md border-none bg-transparent">
+        <EmptyState icon={Sparkles} title="Tiamatrix can't talk with Companion yet" className="w-full max-w-md border-none bg-transparent">
           Update tmx to talk with Companion here.
         </EmptyState>
       </div>

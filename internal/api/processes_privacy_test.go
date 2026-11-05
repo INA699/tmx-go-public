@@ -22,7 +22,7 @@ func TestProcessArgumentsStayWithRequester(t *testing.T) {
 	if _, ok := agentEvent(fleet.AgentCaller("b"), model.BusEvent{Data: ap}); ok {
 		t.Fatal("another agent receives command approval event")
 	}
-	e := model.TimelineEntry{AgentID: "a", Kind: model.EntryToolUse, Tool: "mcp__tmxg__process_start", Input: ap.Input}
+	e := model.TimelineEntry{AgentID: "a", Kind: model.EntryToolUse, Tool: "mcp__tmx__process_start", Input: ap.Input}
 	ev, ok := agentEvent(fleet.AgentCaller("b"), model.BusEvent{Data: e})
 	if !ok {
 		t.Fatal("timeline event lost")

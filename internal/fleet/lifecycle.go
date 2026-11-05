@@ -91,6 +91,11 @@ func (f *Fleet) RestartAgentWith(c Caller, idOrName string, o RestartOptions) (m
 		}
 		prompt = o.Prompt
 	}
+	if c.Peer != "" && prompt != "" { // labelled as the other machine's, never the owner's turn
+		f.mu.Lock()
+		prompt = f.mailLineLocked(model.Message{From: c.ID(), Body: prompt})
+		f.mu.Unlock()
+	}
 	if err := f.startAgentOpts(id, prompt, startOpts{StartOptions: StartOptions{Force: keep}, deliberate: true}); err != nil {
 		return model.Agent{}, err
 	}
@@ -478,7 +483,7 @@ func (f *Fleet) specLocked(r *agentRec) (runner.Spec, error) {
 	spec.Command = f.opts.ClaudeCommand
 	prof := f.profileForLocked(a)
 	spec.PermissionMode = prof.PermissionMode
-	spec.AllowedTools = append([]string{"mcp__tmxg"}, prof.AllowedTools...)
+	spec.AllowedTools = append([]string{"mcp__" + model.MCPServer}, prof.AllowedTools...)
 	spec.DisallowedTools = slices.Clone(prof.DisallowedTools)
 	if prof.ReadOnly {
 		for _, t := range model.ReadOnlyDenied {
@@ -541,7 +546,7 @@ func (f *Fleet) writeMCPConfig(id string, env []string) (string, error) {
 		}
 	}
 	cfg := map[string]any{"mcpServers": map[string]any{
-		"tmxg": map[string]any{"type": "stdio", "command": f.opts.Executable, "args": []string{"mcp"}, "env": envMap},
+		model.MCPServer: map[string]any{"type": "stdio", "command": f.opts.Executable, "args": []string{"mcp"}, "env": envMap},
 	}}
 	b, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {

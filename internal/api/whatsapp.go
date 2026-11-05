@@ -414,7 +414,7 @@ func redactEntry(e model.TimelineEntry) model.TimelineEntry {
 	case strings.HasPrefix(e.Text, whatsapp.Frame), strings.HasPrefix(e.Text, "[WhatsApp]"),
 		e.Kind == model.EntryMessageIn && e.Meta["from"] == model.WhatsAppParty:
 		e.Text = waHidden
-	case e.Kind == model.EntryToolUse && strings.HasPrefix(e.Tool, "mcp__tmxg__whatsapp_"):
+	case e.Kind == model.EntryToolUse && strings.HasPrefix(model.TmxTool(e.Tool), "whatsapp_"):
 		e.Input = json.RawMessage(`{}`)
 	case e.Kind == model.EntryToolUse && (e.Tool == fleet.ToolProcessStart || strings.HasSuffix(e.Tool, "__process_start")):
 		e.Input = json.RawMessage(`{}`)

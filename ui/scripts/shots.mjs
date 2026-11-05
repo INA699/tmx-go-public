@@ -30,7 +30,7 @@ const base = `http://127.0.0.1:${server.address().port}/`;
 const SIZES = { wide: { width: 1440, height: 900 }, small: { width: 1100, height: 720 }, phone: { width: 390, height: 844 } };
 
 // name, url (query + hash), sizes, setup(page)
-// Every page, for the "readable" check (the owner, 3 Nov: "everything is too tiny"): run with
+// Every page, for the "readable" check (nothing too small to read): run with
 // SHOT_TEXT=normal,larger and filter "readable" (e2e.yml's shots job does, by hand).
 const READABLE = [
   ["overview", "#/"],

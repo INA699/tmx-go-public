@@ -7,7 +7,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/api/apitest"
 )
 
-// The feature pass on Hostb (3 Nov, tmx-go #188): the matrix tool's op=get had no id, and a
+// From a feature pass (#188): the matrix tool's op=get had no id, and a
 // lead with no project could not launch workers.
 
 func TestMatrixGetByIDAndNoThread(t *testing.T) {

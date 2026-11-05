@@ -66,10 +66,10 @@ type Options struct {
 	Suspend func(pid int, stop bool) ([]sysinfo.Proc, error)
 	// Discover finds agents started outside tmx (discover/adopt); nil = the real machine.
 	Discover *discover.Scanner
-	// AgentBypass: Claude agents with the guard hook run in bypass mode (guard.go); nil = on.
+	// AgentBypass: Claude agents with the guard hook run in bypass mode (guard.go); nil = off.
 	AgentBypass *bool
 	// FleetAuthorities are "name@host" senders whose peer mail counts as the owner's standing
-	// order (authority.go); nil = DefaultFleetAuthorities.
+	// order (authority.go); nil or empty = none.
 	FleetAuthorities []string
 	// Accounts are the harnesses' named accounts (internal/accounts); nil = one account each.
 	Accounts AccountHomes

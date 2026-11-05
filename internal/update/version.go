@@ -6,18 +6,18 @@ import (
 	"strconv"
 )
 
-// Version is a release version as the Makefile writes it (git describe on fleet-v* tags):
-// fleet-vMAJOR.MINOR.PATCH[-rcN], or that followed by -N-gSHA for a build N commits after the tag (the
-// "latest" channel). A release candidate is lower than its release (fleet-v1.2.3-rc2 < fleet-v1.2.3),
-// the order `tmx release sign` uses (internal/release.Version). Anything else (a dev build, -dirty, a bare commit) is not a release:
-// such builds never update themselves.
+// Version is a release version as the Makefile writes it (git describe on v* tags):
+// vMAJOR.MINOR.PATCH[-rcN], or that followed by -N-gSHA for a build N commits after the tag. A
+// release candidate is lower than its release (v1.2.3-rc2 < v1.2.3). Anything else (a dev build,
+// -dirty, a bare commit, a fleet-v* tag) is not a release: such builds never update themselves,
+// and such tags are never installed.
 type Version struct {
 	Major, Minor, Patch, Ahead int
 	RC                         int // the N of -rcN; 0 = a final release
 	raw                        string
 }
 
-var versionRx = regexp.MustCompile(`^fleet-v(\d+)\.(\d+)\.(\d+)(?:-rc([1-9]\d*))?(?:-(\d+)-g[0-9a-f]{4,40})?$`)
+var versionRx = regexp.MustCompile(`^v(\d+)\.(\d+)\.(\d+)(?:-rc([1-9]\d*))?(?:-(\d+)-g[0-9a-f]{4,40})?$`)
 
 // ParseVersion parses a release version.
 func ParseVersion(s string) (Version, bool) {

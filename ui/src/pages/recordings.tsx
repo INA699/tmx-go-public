@@ -39,8 +39,8 @@ import { absoluteTime, relativeTime } from "@/lib/format";
 import { openRecordDialog } from "@/lib/recorder";
 import { recordNow } from "@/lib/record-now";
 import { loadRecordings, onTranscriptUpdated, recApi, segmentURL, upsertRecording, useRecordings } from "@/lib/recordings";
-import { isClinic, sensitivityOf } from "@/lib/clinic";
-import { ClinicCheckbox } from "@/components/recorder/clinic-checkbox";
+import { isSensitive, sensitivityOf } from "@/lib/sensitive";
+import { SensitiveCheckbox } from "@/components/recorder/sensitive-checkbox";
 import type { Recording, RecordingTranscript } from "@/lib/recording-types";
 import { captureLabel, clock, elapsedMs, hasSound, isLive, transcriptSegment } from "@/lib/recording-types";
 import { href, paths } from "@/lib/router";
@@ -102,7 +102,7 @@ export function RecordingsPage({ id }: { id?: string }) {
   }, [id, list, selected]);
   const rec = selected ?? (extra?.id === id ? extra : undefined);
 
-  // ONE tap records (the owner): screen + camera + microphone at once (record-now.ts); the options are beside it
+  // ONE tap records: screen + camera + microphone at once (record-now.ts); the options are beside it
   const busy = !!live.rec || !available;
   const recordButton = (
     <div className="flex items-center gap-1">
@@ -157,7 +157,7 @@ export function RecordingsPage({ id }: { id?: string }) {
         </PageBody>
       ) : !list?.length ? (
         <PageBody>
-          {/* ONE Record button (the owner): the header's; the empty state points to it instead of repeating it */}
+          {/* ONE Record button: the header's; the empty state points to it instead of repeating it */}
           <EmptyState icon={CircleDot} title="No recordings yet">
             Tap Record above: it records this device's screen, camera and microphone (on a phone: camera and microphone) until you tap Stop. The options beside it record one
             window, a camera clip or the microphone only. Recordings stay on this machine, and your agents can read them.
@@ -263,15 +263,15 @@ function RecordingDetail({ rec }: { rec: Recording }) {
     }
   }
 
-  const [savingClinic, setSavingClinic] = useState(false);
-  async function setClinic(on: boolean) {
-    setSavingClinic(true);
+  const [savingSensitive, setSavingSensitive] = useState(false);
+  async function setSensitive(on: boolean) {
+    setSavingSensitive(true);
     try {
       upsertRecording(await recApi.setSensitivity(rec.id, sensitivityOf(on)));
     } catch (e) {
       toast.error("Not changed", { description: (e as Error).message });
     } finally {
-      setSavingClinic(false);
+      setSavingSensitive(false);
     }
   }
 
@@ -335,7 +335,7 @@ function RecordingDetail({ rec }: { rec: Recording }) {
             <StateBadge rec={rec} />
           </p>
           <div className="mt-2">
-            <ClinicCheckbox checked={isClinic(rec)} onChange={(on) => void setClinic(on)} disabled={savingClinic} />
+            <SensitiveCheckbox checked={isSensitive(rec)} onChange={(on) => void setSensitive(on)} disabled={savingSensitive} />
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -372,7 +372,7 @@ function RecordingDetail({ rec }: { rec: Recording }) {
         </p>
       )}
 
-      {/* the report (the owner): the summary on top, then the video with its sound, the key moments, the transcript */}
+      {/* the report: the summary on top, then the video with its sound, the key moments, the transcript */}
       <SummaryPanel rec={rec} onSeek={onSeek} />
 
       {live ? (

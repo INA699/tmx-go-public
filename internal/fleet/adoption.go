@@ -28,14 +28,14 @@ const (
 
 // eventRules is added to the system prompt of every agent but the head.
 const eventRules = `The owner follows your work in the Matrix: one card per thread (each of the owner's requests), with the agents, files and events on it. ` +
-	`Record events, not chatter, with mcp__tmxg__thread_add (topic: the thread's title; empty: your project's thread), one short line each, never a secret: ` +
+	`Record events, not chatter, with mcp__tmx__thread_add (topic: the thread's title; empty: your project's thread), one short line each, never a secret: ` +
 	`start when you begin, decision, result (with its evidence: a link or path), blocker, handoff when the work passes to someone else, ask, done. ` +
-	`Attach the documents and files you produce with mcp__tmxg__matrix op=attach. ` +
-	`Read your thread with mcp__tmxg__matrix op=get before you start new work and after your context was compacted. ` +
+	`Attach the documents and files you produce with mcp__tmx__matrix op=attach. ` +
+	`Read your thread with mcp__tmx__matrix op=get before you start new work and after your context was compacted. ` +
 	`A correction is a new line with corrects set to the old line's id.`
 
 // leadPlaybook is added to the system prompt of a lead.
-const leadPlaybook = `As a lead you run threads. For each request: open a thread with mcp__tmxg__matrix op=new (the owner's words verbatim, ` +
+const leadPlaybook = `As a lead you run threads. For each request: open a thread with mcp__tmx__matrix op=new (the owner's words verbatim, ` +
 	`where they said it, the user story "As the owner, ... I want ... so that ...", and its owner); launch its workers for it ` +
 	`(agent_launch with thread); instruct them by message, naming the thread; when a worker's part is done, record the result or handoff ` +
 	`and stop it (agent_stop); move the thread with op=state (paused, blocked, done, always with why). ` +
@@ -68,7 +68,7 @@ func (f *Fleet) threadsPromptLocked(a model.Agent) string {
 	shown := 0
 	for _, id := range ids {
 		if shown == promptThreads {
-			fmt.Fprintf(&b, "\n(and %d more: mcp__tmxg__matrix op=mine)", len(ids)-shown)
+			fmt.Fprintf(&b, "\n(and %d more: mcp__tmx__matrix op=mine)", len(ids)-shown)
 			break
 		}
 		t, err := f.st.GetThread(id)

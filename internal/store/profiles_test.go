@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/blackcode-ch/tmx-go/internal/model"
@@ -117,5 +118,40 @@ func TestModelDefaultsUpgradeOnceAndPreserveCustomProfiles(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRenameLegacyMCPTools(t *testing.T) {
+	s := openTest(t)
+	old, _ := model.DefaultProfile("lead")
+	old.Instructions = "Launch workers with mcp__tmxg__agent_launch; report with mcp__tmxg__report."
+	old.AllowedTools = []string{"mcp__tmxg", "Read"}
+	old.DisallowedTools = []string{"mcp__tmxg__whatsapp_send"}
+	if err := s.PutProfile(old); err != nil {
+		t.Fatal(err)
+	}
+	keep, _ := model.DefaultProfile("worker")
+	keep.UpdatedAt = 42
+	if err := s.PutProfile(keep); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 { // idempotent
+		if err := s.RenameLegacyMCPTools(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	list, _ := s.ListProfiles()
+	for _, p := range list {
+		switch p.Slug {
+		case "lead":
+			if p.Instructions != "Launch workers with mcp__tmx__agent_launch; report with mcp__tmx__report." ||
+				!slices.Equal(p.AllowedTools, []string{"mcp__tmx", "Read"}) || !slices.Equal(p.DisallowedTools, []string{"mcp__tmx__whatsapp_send"}) {
+				t.Fatalf("lead: %+v", p)
+			}
+		case "worker":
+			if p.UpdatedAt != 42 {
+				t.Fatalf("an untouched profile was rewritten: %+v", p)
+			}
+		}
 	}
 }

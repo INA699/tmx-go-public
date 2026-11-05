@@ -11,8 +11,8 @@ import (
 )
 
 // #187, lockout = SEV-1: on an existing install (gate on, Windows Hello, a PIN, a paired phone)
-// The owner's PIN and his paired phone work before AND after the upgrade; the PIN now also works
-// at the machine; Windows Hello stays as a shortcut until he switches it off.
+// the owner's PIN and paired phone work before AND after the upgrade; the PIN now also works
+// at the machine; Windows Hello stays as a shortcut until the owner switches it off.
 func TestPINAndPhoneSurviveTheUpgrade(t *testing.T) {
 	f := newDeviceFixture(t)
 	phone := f.paired(t) // paired the old way: Windows Hello at the machine
@@ -108,8 +108,8 @@ func TestHelloCannotGoOffWithoutPIN(t *testing.T) {
 	f := newDeviceFixture(t)
 	f.s.gate.SetPINCheck(f.s.pin.IsSet)
 	deviceResponse(t, f.request(t, "PUT", "/api/gate/hello", "localhost", map[string]bool{"enabled": false}, nil, true), 409)
-	// A new install starts with the shortcut off, yet with no PIN the OS prompt still opens.
-	if f.s.gate.HelloShortcut() || f.s.pin.IsSet() {
+	// A new install offers the OS prompt; with no PIN it is the only way in.
+	if !f.s.gate.HelloShortcut() || f.s.pin.IsSet() {
 		t.Fatalf("fixture: hello=%v pin=%v", f.s.gate.HelloShortcut(), f.s.pin.IsSet())
 	}
 	v := deviceResponse(t, f.request(t, "POST", "/api/protected", "localhost", map[string]string{"value": "x"}, nil, true), 428)

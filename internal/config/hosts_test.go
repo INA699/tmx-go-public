@@ -19,8 +19,7 @@ func TestValidHostName(t *testing.T) {
 
 func TestValidHostPort(t *testing.T) {
 	// 8787 (this daemon's own default port) is deliberately allowed here: a Host may
-	// legitimately be another local daemon running on it. config.go's own Load still refuses
-	// it for c.Port (TestPortConfiguration), a different question.
+	// legitimately be another local daemon running on it.
 	ok := []int{1024, 8787, 8797, 65535}
 	bad := []int{0, 1, 22, 80, 443, 1023, 8777, 43911, 4001, 65536, -1}
 	for _, p := range ok {

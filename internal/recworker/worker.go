@@ -1,4 +1,4 @@
-// Package recworker makes a recording's report without anyone asked (the owner's rule "tool > agent", G5): when
+// Package recworker makes a recording's report without anyone asking (a tool, not an agent's choice): when
 // a recording is done, the recorder itself launches a short-lived worker through the daemon's own launch path,
 // and tracks it. No lead is in the loop. When the worker cannot do its job (no harness, a failed start, it ends
 // before it asked) the daemon makes the report itself; only a report not finished by the deadline fails, with why.

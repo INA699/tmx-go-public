@@ -25,7 +25,7 @@ func TestReleaseAssetHelpers(t *testing.T) {
 	priv, pub := newKey(t)
 	file := bytes.Repeat([]byte("engine "), 1000)
 	sums := "0000000000000000000000000000000000000000000000000000000000000000  whisper-cli_linux_amd64\n"
-	sig := FleetKeyID + ":" + base64.StdEncoding.EncodeToString(ed25519.Sign(priv, signatureMessage(FleetExtraSignatureContext, "o/r", "whisper-engine-v1", []byte(sums))))
+	sig := string(signOwner(priv, []byte(sums))) // as whisper-engine.yml signs
 	hidden := false
 	var ranges []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -95,6 +95,9 @@ func TestReleaseAssetHelpers(t *testing.T) {
 	forged := FleetKeyID + ":" + base64.StdEncoding.EncodeToString(ed25519.Sign(other, signatureMessage(FleetExtraSignatureContext, "o/r", "whisper-engine-v1", []byte(sums))))
 	if _, err := u.VerifySums("whisper-engine-v1", []byte(sums), []byte(forged)); !errors.Is(err, errUnsigned) {
 		t.Fatalf("forged: %v", err)
+	}
+	if _, err := u.VerifySums("whisper-engine-v1", []byte(sums), signOwner(other, []byte(sums))); !errors.Is(err, errUnsigned) {
+		t.Fatalf("another key: %v", err)
 	}
 	if _, err := u.VerifySums("whisper-engine-v1", []byte(sums+"x"), []byte(sig)); !errors.Is(err, errUnsigned) {
 		t.Fatalf("changed sums: %v", err)

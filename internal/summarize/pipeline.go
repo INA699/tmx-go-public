@@ -349,7 +349,7 @@ func (s *Service) make(ctx context.Context, x model.RecordingSummary) outcome {
 	m := s.model()
 	s.takeWrote("")
 	sum, parts, err := s.write(ctx, r, in, m)
-	m = s.takeWrote(m) // the local model, for a clinic recording or summaries.backend "local"
+	m = s.takeWrote(m) // the local model, for a sensitive recording or summaries.backend "local"
 	if err != nil {
 		return outcome{state: model.SummaryFailed, err: err.Error(), note: note}
 	}

@@ -209,6 +209,9 @@ func (f *Fleet) sendPeerLocked(c Caller, party string, req SendRequest, retryHas
 	if c.Companion {
 		return model.Message{}, errf(KindForbidden, "Companion cannot mail other machines")
 	}
+	if c.Peer != "" { // never a relay: a machine mails the others itself
+		return model.Message{}, errf(KindForbidden, "another machine of the fleet cannot mail other machines through this one")
+	}
 	if !c.Owner && reservedSenders[f.nameOfLocked(c.ID())] {
 		return model.Message{}, errf(KindForbidden, "an agent named %q cannot mail other machines: that name is reserved there for the owner or the system", f.nameOfLocked(c.ID()))
 	}

@@ -180,7 +180,7 @@ function Details({ agent }: { agent: Agent }) {
           </Detail>
           <Detail label="Level">{LEVEL_LABEL[agent.level]}</Detail>
           <Detail label="Harness · mode">
-            {harnessLabel(agent.harness)} · {agent.mode === "terminal" ? "its own screen (read by tmx)" : "chat"}
+            {harnessLabel(agent.harness)} · {agent.mode === "terminal" ? "its own screen (read by Tiamatrix)" : "chat"}
             {agent.agy_full_access && <span className="ml-2 text-amber-600">Owner enabled permission skipping</span>}
             {agent.home_mode ? ` · switched from ${agent.home_mode === "chat" ? "chat" : "its screen"} (a daemon restart brings it back)` : ""}
             {agent.pending_mode ? ` · switches to ${agent.pending_mode === "chat" ? "chat" : "its screen"} when this turn ends` : ""}

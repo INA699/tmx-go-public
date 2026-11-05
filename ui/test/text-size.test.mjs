@@ -1,4 +1,4 @@
-// Text size (src/lib/text-size.ts; the owner, 3 Nov: "everything is too tiny"): Normal is 125% of
+// Text size (src/lib/text-size.ts; readable by default): Normal is 125% of
 // the old size, Large and Larger more; anything unknown or missing is Normal.
 import test from "node:test";
 import assert from "node:assert/strict";

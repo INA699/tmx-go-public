@@ -10,7 +10,8 @@ import (
 	"strings"
 )
 
-// GitHub releases are filtered to the fleet namespace before version comparison.
+// GitHub releases (REST API v3), filtered to v* tags before versions are compared: "stable" takes
+// the newest v* release that is no prerelease and no rc, "latest" also takes those.
 
 type release struct {
 	TagName    string  `json:"tag_name"`
@@ -100,7 +101,7 @@ func (u *Updater) findRelease(ctx context.Context, repo, channel, want string) (
 		err = json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&releases)
 		resp.Body.Close()
 		if err != nil {
-			return release{}, fmt.Errorf("reading fleet releases: %w", err)
+			return release{}, fmt.Errorf("reading the releases: %w", err)
 		}
 		for _, r := range releases {
 			v, ok := ParseVersion(r.TagName)
@@ -117,15 +118,15 @@ func (u *Updater) findRelease(ctx context.Context, repo, channel, want string) (
 		}
 		if len(releases) < 100 {
 			if best.TagName == "" && want != "" {
-				return release{}, fmt.Errorf("no published fleet release %s on the %s channel", want, channel)
+				return release{}, fmt.Errorf("no published release %s on the %s channel", want, channel)
 			}
 			if best.TagName == "" {
-				return release{}, errors.New("no fleet release available")
+				return release{}, errors.New("no release available")
 			}
 			return best, nil
 		}
 	}
-	return release{}, errors.New("fleet release scan limit exceeded")
+	return release{}, errors.New("release scan limit exceeded")
 }
 
 // fetch downloads an asset into w, at most max bytes.

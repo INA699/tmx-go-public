@@ -84,12 +84,13 @@ func TestKeysStatementRefusals(t *testing.T) {
 	}
 }
 
-// rotHarness is a harness whose keys come from config.json "update" (fleet_keys), as in a daemon.
+// rotHarness is a harness whose keys are only the extra keys of config.json "update" (fleet_keys):
+// no owner release key, so only what is pinned there counts.
 func rotHarness(t *testing.T, g *fakeGitHub, pins ...config.FleetKey) *harness {
 	exe := filepath.Join(t.TempDir(), "bin", "tmx")
-	writeExe(t, exe, "fleet-v0.1.1")
-	h := newHarness(t, g, "", "fleet-v0.1.1", exe, "linux", false)
-	h.u.o.Keys = nil
+	writeExe(t, exe, "v0.1.1")
+	h := newHarness(t, g, "", "v0.1.1", exe, "linux", false)
+	h.u.o.Keys = []string{}
 	h.mu.Lock()
 	h.settings.FleetKeys = pins
 	h.mu.Unlock()
@@ -101,9 +102,15 @@ func rotHarness(t *testing.T, g *fakeGitHub, pins ...config.FleetKey) *harness {
 	return h
 }
 
-// release puts tag on the stable channel, SHA256SUMS signed by (id, key), plus KEYS/KEYS.sig if given.
+// release puts tag on the stable channel, SHA256SUMS signed by the extra key (id, key), plus
+// KEYS/KEYS.sig if given.
 func (g *fakeGitHub) release(tag, id string, key ed25519.PrivateKey, keys, keysSig []byte) {
-	name := "tmxg_" + tag + "_linux_amd64"
+	g.releaseSigned(tag, func(sums []byte) []byte { return []byte(SignReleaseLine(id, key, "o/r", tag, sums) + "\n") }, keys, keysSig)
+}
+
+// releaseSigned is release with SHA256SUMS.sig made by sign.
+func (g *fakeGitHub) releaseSigned(tag string, sign func(sums []byte) []byte, keys, keysSig []byte) {
+	name := "tmx_" + tag + "_linux_amd64"
 	bin := []byte("binary " + tag)
 	h := sha256.Sum256(bin)
 	sums := fmt.Sprintf("%s  %s\n", hex.EncodeToString(h[:]), name)
@@ -116,7 +123,7 @@ func (g *fakeGitHub) release(tag, id string, key ed25519.PrivateKey, keys, keysS
 	}
 	add(name, bin)
 	add("SHA256SUMS", []byte(sums))
-	add("SHA256SUMS.sig", []byte(SignReleaseLine(id, key, "o/r", tag, []byte(sums))+"\n"))
+	add("SHA256SUMS.sig", sign([]byte(sums)))
 	if keys != nil {
 		add("KEYS", keys)
 	}
@@ -157,14 +164,14 @@ func TestRotationRoundTrip(t *testing.T) {
 	k2, p2 := newKey(t)
 	h := rotHarness(t, g, edKey("k1", p1))
 
-	g.release("fleet-v0.2.0", "k2", k2, nil, nil)
+	g.release("v0.2.0", "k2", k2, nil, nil)
 	if err := h.stageLatest(t); err == nil {
 		t.Fatal("a release signed by a key not pinned yet was accepted")
 	}
 
 	s1 := statement(t, "o/r", 1, edKey("k1", p1), edKey("k2", p2))
 	// A forged statement (signed by v2 itself) refuses the release and pins nothing.
-	g.release("fleet-v0.2.0", "k2", k2, s1, []byte(SignKeysLine("k2", k2, "o/r", 1, s1)))
+	g.release("v0.2.0", "k2", k2, s1, []byte(SignKeysLine("k2", k2, "o/r", 1, s1)))
 	if err := h.stageLatest(t); err == nil {
 		t.Fatal("a self-signed statement was accepted")
 	}
@@ -172,12 +179,12 @@ func TestRotationRoundTrip(t *testing.T) {
 		t.Fatalf("after a forged statement: %s %d", ids, n)
 	}
 	// KEYS without KEYS.sig refuses the release.
-	g.release("fleet-v0.2.0", "k1", k1, s1, nil)
+	g.release("v0.2.0", "k1", k1, s1, nil)
 	if err := h.stageLatest(t); err == nil {
 		t.Fatal("KEYS without KEYS.sig accepted")
 	}
 
-	g.release("fleet-v0.2.0", "k2", k2, s1, []byte(SignKeysLine("k1", k1, "o/r", 1, s1)))
+	g.release("v0.2.0", "k2", k2, s1, []byte(SignKeysLine("k1", k1, "o/r", 1, s1)))
 	if err := h.stageLatest(t); err != nil {
 		t.Fatalf("statement by v1, release by v2: %v", err)
 	}
@@ -186,7 +193,7 @@ func TestRotationRoundTrip(t *testing.T) {
 	}
 
 	s2 := statement(t, "o/r", 2, edKey("k2", p2))
-	g.release("fleet-v0.3.0", "k2", k2, s2, []byte(SignKeysLine("k2", k2, "o/r", 2, s2)))
+	g.release("v0.3.0", "k2", k2, s2, []byte(SignKeysLine("k2", k2, "o/r", 2, s2)))
 	if err := h.stageLatest(t); err != nil {
 		t.Fatalf("statement 2 by v2: %v", err)
 	}
@@ -197,7 +204,7 @@ func TestRotationRoundTrip(t *testing.T) {
 	// An old statement (serial 1, signed by v1, which is no longer pinned) is ignored before its
 	// signature is checked: it changes nothing and does not block the release. A statement by v2
 	// with an already used serial changes nothing either.
-	g.release("fleet-v0.4.0", "k2", k2, s1, []byte(SignKeysLine("k1", k1, "o/r", 1, s1)))
+	g.release("v0.4.0", "k2", k2, s1, []byte(SignKeysLine("k1", k1, "o/r", 1, s1)))
 	if err := h.stageLatest(t); err != nil {
 		t.Fatalf("an old statement by a dropped key blocked the release: %v", err)
 	}
@@ -205,14 +212,14 @@ func TestRotationRoundTrip(t *testing.T) {
 		t.Fatalf("an old statement changed the pins: %s %d", ids, n)
 	}
 	old := statement(t, "o/r", 2, edKey("k1", p1), edKey("k2", p2))
-	g.release("fleet-v0.4.0", "k2", k2, old, []byte(SignKeysLine("k2", k2, "o/r", 2, old)))
+	g.release("v0.4.0", "k2", k2, old, []byte(SignKeysLine("k2", k2, "o/r", 2, old)))
 	if err := h.stageLatest(t); err != nil {
 		t.Fatalf("an already used serial should be ignored, not refuse the release: %v", err)
 	}
 	if ids, n := h.pinned(); ids != "k2" || n != 2 {
 		t.Fatalf("a replayed serial changed the pins: %s %d", ids, n)
 	}
-	g.release("fleet-v0.4.0", "k1", k1, nil, nil)
+	g.release("v0.4.0", "k1", k1, nil, nil)
 	if err := h.stageLatest(t); err == nil {
 		t.Fatal("a release by the dropped key v1 was accepted")
 	}
@@ -229,7 +236,7 @@ func TestSetKeys(t *testing.T) {
 	h.settings.FleetKeys, h.settings.FleetPublicKey, h.settings.KeysSerial = nil, p1, 7
 	h.mu.Unlock()
 
-	for _, bad := range [][]config.FleetKey{nil, {edKey("k2", "x")}, {edKey("k2", p2), edKey("k2", p1)}} {
+	for _, bad := range [][]config.FleetKey{{edKey("k2", "x")}, {edKey("k2", p2), edKey("k2", p1)}} {
 		if _, err := h.u.SetKeys(bad, nil); err == nil {
 			t.Errorf("%v accepted", bad)
 		}
@@ -250,6 +257,10 @@ func TestSetKeys(t *testing.T) {
 	if legacy != "" {
 		t.Fatal("the legacy key stayed pinned")
 	}
+	// An empty set drops every extra key (the owner's built-in keys stay); the serial is kept.
+	if got, err := h.u.SetKeys(nil, nil); err != nil || len(got.FleetKeys) != 0 || got.KeysSerial != 7 {
+		t.Fatalf("clear: %+v %v", got, err)
+	}
 }
 
 // The owner's re-pin that lands while KEYS downloads wins: the statement is checked against the
@@ -262,7 +273,7 @@ func TestRotationDoesNotUndoARepin(t *testing.T) {
 	_, p3 := newKey(t)
 	h := rotHarness(t, g, edKey("k1", p1))
 	evil := statement(t, "o/r", 1, edKey("k1", p1), edKey("k3", p3))
-	g.release("fleet-v0.2.0", "k1", k1, evil, []byte(SignKeysLine("k1", k1, "o/r", 1, evil)))
+	g.release("v0.2.0", "k1", k1, evil, []byte(SignKeysLine("k1", k1, "o/r", 1, evil)))
 	repinned := false
 	h.u.keysFetched = func() {
 		if _, err := h.u.SetKeys([]config.FleetKey{edKey("k2", p2)}, nil); err != nil {
@@ -286,7 +297,7 @@ func TestRotationSerialStep(t *testing.T) {
 	h := rotHarness(t, g, edKey("k1", p1))
 	for _, serial := range []uint64{maxSerialStep + 1, 1<<64 - 1} {
 		s := statement(t, "o/r", serial, edKey("k1", p1), edKey("k2", p2))
-		g.release("fleet-v0.2.0", "k1", k1, s, []byte(SignKeysLine("k1", k1, "o/r", serial, s)))
+		g.release("v0.2.0", "k1", k1, s, []byte(SignKeysLine("k1", k1, "o/r", serial, s)))
 		if err := h.stageLatest(t); err == nil {
 			t.Fatalf("serial %d accepted", serial)
 		}
@@ -295,7 +306,7 @@ func TestRotationSerialStep(t *testing.T) {
 		}
 	}
 	s := statement(t, "o/r", maxSerialStep, edKey("k1", p1), edKey("k2", p2))
-	g.release("fleet-v0.2.0", "k1", k1, s, []byte(SignKeysLine("k1", k1, "o/r", maxSerialStep, s)))
+	g.release("v0.2.0", "k1", k1, s, []byte(SignKeysLine("k1", k1, "o/r", maxSerialStep, s)))
 	if err := h.stageLatest(t); err != nil {
 		t.Fatalf("a step of exactly %d: %v", maxSerialStep, err)
 	}

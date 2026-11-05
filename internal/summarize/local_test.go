@@ -98,12 +98,12 @@ func TestLocalFallsBackToTextWithoutVision(t *testing.T) {
 	}
 }
 
-// The local model is this machine's: a non-loopback address is refused before anything is sent (a clinic ask, so
+// The local model is this machine's: a non-loopback address is refused before anything is sent (a sensitive ask, so
 // nothing falls back to the cloud model).
 func TestLocalRefusesARemoteAddress(t *testing.T) {
 	for _, u := range []string{"http://localhost:11434", "http://192.0.2.10:11434", "https://127.0.0.1:11434", "http://example.com", "ftp://127.0.0.1"} {
 		s := localService(config.SummaryConfig{LocalURL: u})
-		if _, err := s.run(t.Context(), ask{dir: t.TempDir(), prompt: "p", clinic: true}); err == nil || !strings.Contains(err.Error(), "local_url") {
+		if _, err := s.run(t.Context(), ask{dir: t.TempDir(), prompt: "p", localOnly: true}); err == nil || !strings.Contains(err.Error(), "local_url") {
 			t.Fatalf("%s: %v", u, err)
 		}
 	}
@@ -118,7 +118,7 @@ func triedClaude(err error) bool { return strings.Contains(strings.ToLower(err.E
 // noClaude points the cloud path at a claude that does not exist: its error shows whether it was tried.
 func noClaude(t *testing.T, s *Service) { s.o.Claude = filepath.Join(t.TempDir(), "no-claude") }
 
-// The cheap cloud model writes reports by default (the owner, 3 Nov: "we care only about performance"); "local"
+// The cheap cloud model writes reports by default (the better report wins over where it runs); "local"
 // prefers the local model.
 func TestTheCloudModelIsTheDefault(t *testing.T) {
 	for b, want := range map[string]bool{"": false, "claude": false, " Local ": true, "local": true} {
@@ -143,15 +143,15 @@ func TestLocalFallsBackToTheCloudModel(t *testing.T) {
 	}
 }
 
-// A clinic recording (patient data, nLPD) is written by local models only, whatever the backend: with one it is
+// A sensitive recording is written by local models only, whatever the backend: with one it is
 // the local model that writes, without one it fails with the reason and the cloud model is never tried.
-func TestClinicIsLocalOnly(t *testing.T) {
+func TestSensitiveIsLocalOnly(t *testing.T) {
 	srv, got := fakeOllama(t, false)
 	for _, b := range []string{"", "claude", "local"} {
 		s := New(Options{Settings: func() config.SummaryConfig { return config.SummaryConfig{Backend: b, LocalURL: srv.URL} }})
 		noClaude(t, s)
 		n := len(*got)
-		if _, err := s.run(t.Context(), ask{dir: t.TempDir(), prompt: "p", clinic: true}); err != nil || len(*got) != n+1 {
+		if _, err := s.run(t.Context(), ask{dir: t.TempDir(), prompt: "p", localOnly: true}); err != nil || len(*got) != n+1 {
 			t.Fatalf("backend %q: %v (ollama asked %d times)", b, err, len(*got)-n)
 		}
 		if m := s.takeWrote(""); m != DefaultLocalModel {
@@ -159,8 +159,8 @@ func TestClinicIsLocalOnly(t *testing.T) {
 		}
 		down := New(Options{Settings: func() config.SummaryConfig { return config.SummaryConfig{Backend: b, LocalURL: "http://127.0.0.1:1"} }})
 		noClaude(t, down)
-		_, err := down.run(t.Context(), ask{dir: t.TempDir(), prompt: "p", clinic: true})
-		if err == nil || !strings.Contains(err.Error(), "clinic recording is summarized by local models only") || triedClaude(err) {
+		_, err := down.run(t.Context(), ask{dir: t.TempDir(), prompt: "p", localOnly: true})
+		if err == nil || !strings.Contains(err.Error(), "recording marked sensitive is summarized by local models only") || triedClaude(err) {
 			t.Fatalf("backend %q without a local route: %v", b, err)
 		}
 	}
@@ -177,7 +177,7 @@ func TestLocalNeverFollowsARedirect(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	s := localService(config.SummaryConfig{LocalURL: srv.URL})
-	if _, err := s.run(t.Context(), ask{dir: t.TempDir(), prompt: "p", clinic: true}); err == nil { // local only: no cloud fallback
+	if _, err := s.run(t.Context(), ask{dir: t.TempDir(), prompt: "p", localOnly: true}); err == nil { // local only: no cloud fallback
 		t.Fatal("a redirect answer was taken as a summary")
 	}
 }

@@ -1,21 +1,22 @@
 <p align="center">
-  <img src="build/appicon.png" alt="tmx icon" width="112" height="112">
+  <img src="build/appicon.png" alt="Tiamatrix icon" width="112" height="112">
 </p>
 
-<h1 align="center">tmx</h1>
+<h1 align="center">Tiamatrix</h1>
 
 <p align="center">
-  Your coding agents, run as a team on your own machine.
+  Your coding agents, run as a team on your own machine.<br>
+  The command is <code>tmx</code>.
 </p>
 
 <p align="center">
-  <img src="docs/images/matrix.png" alt="tmx's Matrix: every thread on a canvas, one string per project; a thread open on the right with the head's turns on it, its state and its events" width="100%">
+  <img src="docs/images/matrix.png" alt="Tiamatrix's Matrix: every thread on a canvas, one string per project; a thread open on the right with the head's turns on it, its state and its events" width="100%">
 </p>
 
-One binary that runs a tree of coding agents on your machine: a head agent, a lead per project, and
+Tiamatrix is one binary, `tmx`, that runs a tree of coding agents on your machine: a head agent, a lead per project, and
 workers under each lead. The same binary is the daemon, the CLI, the MCP server and the desktop app.
-It also has peer-to-peer chats with other people's tmx (QR invites, DMs, groups), a link to
-Companion, and a Board: the head's conversation as strings of cards, one string per topic.
+It also has peer-to-peer chats with other people's Tiamatrix (QR invites, DMs, groups), a link to
+Companion, and the Matrix: every thread on a canvas, one string per project.
 
 ```sh
 make tools   # once: the Wails CLI (for the desktop window)

@@ -1,6 +1,6 @@
 // The recording indicator (DESIGN.md "Recorder"): a bar on every page while a recording runs,
 // with the elapsed time, Pause/Resume and Stop, in the window that records and in every other
-// client of this daemon ("Recording on this machine"). It also puts "● Recording 12:03 — tmx"
+// client of this daemon ("Recording on this machine"). It also puts "● Recording 12:03 — Tiamatrix"
 // in the window title and restores the title afterwards.
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Pause, Play, Square } from "lucide-react";
@@ -40,7 +40,7 @@ function setWindowTitle(title: string) {
   }
 }
 
-/** "● Recording 12:03 — tmx" while live; the title from before afterwards. */
+/** "● Recording 12:03 — Tiamatrix" while live; the title from before afterwards. */
 function useRecordingTitle(live: boolean, label: () => string) {
   const original = useRef<string | null>(null);
   const labelRef = useRef(label);
@@ -50,13 +50,13 @@ function useRecordingTitle(live: boolean, label: () => string) {
   });
   useEffect(() => {
     if (!live) return;
-    if (original.current === null) original.current = document.title || "tmx";
+    if (original.current === null) original.current = document.title || "Tiamatrix";
     const update = () => setWindowTitle(labelRef.current());
     update();
     const id = setInterval(update, 1000);
     return () => {
       clearInterval(id);
-      setWindowTitle(original.current ?? "tmx");
+      setWindowTitle(original.current ?? "Tiamatrix");
       original.current = null;
     };
   }, [live]);
@@ -76,7 +76,7 @@ export function RecordingBar() {
   }, [status]);
 
   const live = !!rec;
-  useRecordingTitle(live, () => `● Recording${paused ? " (paused)" : ""} ${clock(elapsed(Date.now()))} — tmx`);
+  useRecordingTitle(live, () => `● Recording${paused ? " (paused)" : ""} ${clock(elapsed(Date.now()))} — Tiamatrix`);
   if (!rec) return null;
 
   const act = async (what: "pause" | "resume" | "stop") => {

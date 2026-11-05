@@ -1,20 +1,13 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
-	"log/slog"
 	"net/http"
-	"net/http/httptest"
-	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/blackcode-ch/tmx-go/internal/config"
-	"github.com/blackcode-ch/tmx-go/internal/ownerpin"
-	"github.com/blackcode-ch/tmx-go/internal/peers"
 )
 
 // The owner PIN replaces every passkey in the browser (ownerpin.go). User story: as the owner,
@@ -58,7 +51,7 @@ func TestPINSetOnlyAtTheMachine(t *testing.T) {
 	// Without the owner's credentials nothing about the PIN is reachable.
 	deviceResponse(t, f.request(t, "GET", "/api/gate/pin", deviceTestHost, nil, nil, false), 401)
 	deviceResponse(t, f.request(t, "POST", "/api/gate/pin", "localhost", map[string]string{"pin": "111111"}, nil, false), 401)
-	// The record is a peer route: a browser never gets it.
+	// The record is never served: a browser never gets it.
 	if w := f.request(t, "GET", "/api/gate/pin/record", deviceTestHost, nil, cookie, false); w.Code == 200 {
 		t.Fatal("browser read the PIN record")
 	}
@@ -164,7 +157,7 @@ func TestPairPhoneWithPIN(t *testing.T) {
 	deviceResponse(t, f.request(t, "POST", "/api/pair/pin", deviceTestHost, map[string]string{"pin": testPIN}, late, false), 400)
 }
 
-// Wrong PINs slow down, never lock out; the owner at the machine clears it at once.
+// Wrong PINs slow down, never lock out for good; the owner at the machine clears it at once.
 func TestPINBackoffNeverALockout(t *testing.T) {
 	f := newDeviceFixture(t)
 	f.setPIN(t, testPIN)
@@ -178,11 +171,13 @@ func TestPINBackoffNeverALockout(t *testing.T) {
 	if w.Header().Get("Retry-After") == "" || v["wait_s"] == nil {
 		t.Fatal("no wait given")
 	}
-	// The paired device is another source: the pairing storm doesn't block the owner's phone.
-	deviceResponse(t, f.request(t, "POST", "/api/gate/pin/session", deviceTestHost, map[string]string{"pin": testPIN}, cookie, false), 200)
+	// The wait is machine-wide: the paired phone waits too, and so does the local UI, whatever
+	// nonce it sends (a new nonce is not a new source).
+	deviceResponse(t, f.request(t, "POST", "/api/gate/pin/session", deviceTestHost, map[string]string{"pin": testPIN}, cookie, false), 429)
 	// A browser can't clear the waits; the owner at the machine can.
 	deviceResponse(t, f.request(t, "POST", "/api/gate/pin/clear", deviceTestHost, nil, cookie, false), 403)
 	deviceResponse(t, f.request(t, "POST", "/api/gate/pin/clear", "localhost", nil, nil, true), 200)
+	deviceResponse(t, f.request(t, "POST", "/api/gate/pin/session", deviceTestHost, map[string]string{"pin": testPIN}, cookie, false), 200)
 	deviceResponse(t, f.request(t, "POST", "/api/pair/pin", deviceTestHost, map[string]string{"pin": testPIN}, claim, false), 200)
 	// And without clearing, the wait ends by itself.
 	_, claim = f.start(t)
@@ -203,43 +198,6 @@ func TestGateStatusSaysPIN(t *testing.T) {
 	f.setPIN(t, testPIN)
 	if st = f.s.gateStatus(r); !st.Available || st.Unavailable != "" {
 		t.Fatalf("%+v", st)
-	}
-}
-
-// pullPIN adopts a peer's newer record (the 5-minute pull) and ignores an older one.
-func TestPullPINFromPeer(t *testing.T) {
-	now := time.Now()
-	newer := map[string]any{"salt": "000102030405060708090a0b0c0d0e0f", "hash": "53e59f1f9f56c2317d99f7a1e76fd1d43677ccb19c2c125e054f9a81281e0aec", "set": float64(now.Unix())}
-	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/gate/pin/record" || r.Header.Get(peers.HeaderOnBehalf) != "daemon" || r.Header.Get(peers.HeaderToken) == "" {
-			w.WriteHeader(403)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"record": newer})
-	}))
-	defer srv.Close()
-	home := t.TempDir()
-	cfg := config.Config{Profile: config.ProfileProduction, Machine: "hostb", Peers: []config.Peer{{Name: "hosta", URL: srv.URL}}}
-	pc := peers.New(cfg, config.Paths{Home: home}, nil)
-	pc.SetTransport(srv.Client().Transport)
-	if _, err := pc.Tokens().Store("hosta", peers.NewPairToken(), "test"); err != nil {
-		t.Fatal(err)
-	}
-	s := &Server{peers: pc, pin: ownerpin.Open(filepath.Join(home, "secrets", "owner-pin.json")), log: slog.New(slog.DiscardHandler)}
-	s.pin.Now = func() time.Time { return now.Add(-time.Hour) }
-	if _, err := s.pin.Set("999999"); err != nil { // set an hour ago: the peer's is newer
-		t.Fatal(err)
-	}
-	s.pin.Now = func() time.Time { return now }
-	s.pullPIN(context.Background())
-	if s.pin.Verify("x", "123456") != nil {
-		t.Fatal("newer peer record not adopted")
-	}
-	newer["set"] = 1.0
-	newer["hash"] = "00" + newer["hash"].(string)[2:]
-	s.pullPIN(context.Background())
-	if s.pin.Verify("x", "123456") != nil {
-		t.Fatal("older record replaced ours")
 	}
 }
 
@@ -291,5 +249,18 @@ func TestParallelPairGuesses(t *testing.T) {
 	wg.Wait()
 	if wrong.Load() > 5 || wrong.Load()+waited.Load() != 60 {
 		t.Fatalf("checked %d, waited %d", wrong.Load(), waited.Load())
+	}
+}
+
+// A local client's UI nonce is its own choice: a fresh one per guess is never a fresh source.
+func TestLocalPINSourceIgnoresTheNonce(t *testing.T) {
+	src := func(nonce string) string {
+		r, _ := http.NewRequest("POST", "http://localhost/api/gate/confirmations/x/pin", nil)
+		r.RemoteAddr = "127.0.0.1:5000"
+		r.Header.Set(UISessionHeader, nonce)
+		return pinSource(r, "")
+	}
+	if a, b := src(strings.Repeat("a", 64)), src(strings.Repeat("b", 64)); a != b || a != "local" {
+		t.Fatalf("local sources %q, %q", a, b)
 	}
 }

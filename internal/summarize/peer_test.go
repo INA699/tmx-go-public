@@ -51,7 +51,7 @@ func TestViaPeerUsesThePeersLocalModel(t *testing.T) {
 }
 
 // A peer without the route (still the Python daemon): the cloud model writes the report instead, except for a
-// clinic recording, which fails with the reason.
+// sensitive recording, which fails with the reason.
 func TestViaPeerWithoutTheRoute(t *testing.T) {
 	gone := errors.New("hosta has no summary route yet (it runs it once its daemon is tmx-go)")
 	s := localService(config.SummaryConfig{ViaPeer: "hosta"})
@@ -62,15 +62,15 @@ func TestViaPeerWithoutTheRoute(t *testing.T) {
 		t.Fatalf("falls back to the cloud model: %v", err)
 	}
 	a := framesAsk(t, 0)
-	a.clinic = true
+	a.localOnly = true
 	_, err = s.run(t.Context(), a)
-	if err == nil || !strings.Contains(err.Error(), "clinic recording is summarized by local models only (patient data, nLPD), and the local model on hosta: hosta has no summary route yet") || triedClaude(err) {
-		t.Fatalf("clinic: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "recording marked sensitive is summarized by local models only, and the local model on hosta: hosta has no summary route yet") || triedClaude(err) {
+		t.Fatalf("sensitive: %v", err)
 	}
 	none := localService(config.SummaryConfig{ViaPeer: "hosta"}) // no fleet peers at all
 	noClaude(t, none)
 	if _, err := none.run(t.Context(), a); err == nil || !strings.Contains(err.Error(), "no fleet peers") {
-		t.Fatalf("clinic without peers: %v", err)
+		t.Fatalf("sensitive without peers: %v", err)
 	}
 }
 

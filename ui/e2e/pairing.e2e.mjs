@@ -9,9 +9,11 @@ import { launchBrowser, openPage, signIn, startDaemon } from "./harness.mjs";
 
 const PIN = "482915";
 
-test("pairing a phone end to end with the owner PIN", { timeout: 5 * 60_000 }, async () => {
+test("pairing a phone end to end with the owner PIN", { timeout: 5 * 60_000 }, async t => {
   const d = await startDaemon({ phone: true });
+  t.after(() => d.stop());
   const browser = await launchBrowser();
+  t.after(() => browser.close());
   try {
     // the owner sets the PIN once, at the machine
     const owner = await openPage(browser, { origin: d.url });
@@ -55,8 +57,5 @@ test("pairing a phone end to end with the owner PIN", { timeout: 5 * 60_000 }, a
   } catch (e) {
     console.log("daemon log (tail):\n" + d.log.slice(-60).join(""));
     throw e;
-  } finally {
-    await browser.close();
-    await d.stop();
   }
 });

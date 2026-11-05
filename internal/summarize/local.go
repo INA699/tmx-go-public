@@ -3,7 +3,7 @@ package summarize
 // The local backend: the local Ollama (loopback only, summaries.local_url, default http://127.0.0.1:11434) with
 // summaries.local_model (default gemma4:e4b, which reads the still frames as images), or a fleet peer's
 // (summaries.via_peer, peer.go). It writes a summary when summaries.backend is "local" (falling back to the cloud
-// model without a local route), and always for a clinic recording (patient data: local only, see run).
+// model without a local route), and always for a sensitive recording (local only, see run).
 
 import (
 	"bytes"

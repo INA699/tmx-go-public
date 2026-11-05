@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	tc "github.com/blackcode-ch/tmx-go/internal/client"
 	"github.com/blackcode-ch/tmx-go/internal/config"
 	"github.com/blackcode-ch/tmx-go/internal/update"
 )
@@ -51,7 +52,6 @@ func TestUpdateKeysRepin(t *testing.T) {
 		five = append(five, k(id, p))
 	}
 	for name, bad := range map[string]any{
-		"empty":        map[string]any{"fleet_keys": []any{}},
 		"bad key":      map[string]any{"fleet_keys": []any{k("k2", "nope")}},
 		"five keys":    map[string]any{"fleet_keys": five},
 		"require type": map[string]any{"fleet_keys": []any{k("k2", p2)}, "require": []string{"webauthn"}},
@@ -85,17 +85,52 @@ func TestUpdateKeysRepin(t *testing.T) {
 	if ks := d.UpdateSettings().FleetKeys; len(ks) != 1 || ks[0].Key != p2 {
 		t.Fatalf("not saved: %+v", ks)
 	}
+
+	// An empty set drops every extra key (the built-in release key stays): asked like any re-pin.
+	none := map[string]any{"fleet_keys": []any{}}
+	s, conf = call(t, owner, "PUT", "/api/update/keys", none, nil)
+	if s != http.StatusPreconditionRequired || !strings.Contains(conf.Reason, "pin none, drop k2 "+f2) {
+		t.Fatalf("clear without proof: %d %q", s, conf.Reason)
+	}
+	proof = confirmed(t, owner, conf)
+	if s, _ := call(t, proof, "PUT", "/api/update/keys", none, &got); s != 0 || len(got.FleetKeys) != 0 || len(got.ReleaseKeys) == 0 {
+		t.Fatalf("clear: %d %+v", s, got)
+	}
 }
 
-// v1 refuses turning automatic installs on, and an install of a tag that is not a fleet release
-// tag, both before anyone is asked. A valid tag asks with the tag in the reason, then is checked
+// A peer machine (pair token) never reaches the update routes, re-pinning the keys least of all:
+// they are the owner's only (an owner on the same server gets past that check: 501, no updater).
+func TestUpdateRoutesRefusePeers(t *testing.T) {
+	s := newPeerSetup(t)
+	p, _ := pubKey(t)
+	body := map[string]any{"fleet_keys": []any{map[string]string{"id": "k1", "type": "ed25519", "key": p}}}
+	for _, r := range []struct {
+		method, path string
+		body         any
+	}{
+		{"GET", "/api/update", nil}, {"PUT", "/api/update", map[string]any{"channel": "latest"}},
+		{"POST", "/api/update/install", map[string]any{"now": true}}, {"GET", "/api/update/keys", nil},
+		{"PUT", "/api/update/keys", body}, {"PUT", "/api/update/token", map[string]string{"token": "x"}},
+		{"PUT", "/api/update/drill", map[string]bool{"arm": true}},
+	} {
+		if code := peerDo(t, s.url, r.method, r.path, "hosta", s.pair, nil, r.body, nil); code != http.StatusForbidden {
+			t.Errorf("peer %s %s: %d, want 403", r.method, r.path, code)
+		}
+	}
+	if code, _ := call(t, tc.New(s.url, s.d.OwnerToken), "PUT", "/api/update/keys", body, nil); code != http.StatusNotImplemented {
+		t.Fatalf("owner on the peer server: %d, want 501", code)
+	}
+}
+
+// v1 refuses turning automatic installs on, and an install of a tag that is not a release tag
+// (vX.Y.Z[-rcN]), both before anyone is asked. A valid tag asks with the tag in the reason, then is checked
 // (here: a dev build, updates off = 409).
 func TestUpdateAutoOnAndInstallTag(t *testing.T) {
 	d, owner, _, _ := configAndUpdateDaemon(t)
 	if s, _ := call(t, owner, "PUT", "/api/update", map[string]bool{"auto": true}, nil); s != http.StatusBadRequest {
 		t.Fatalf("auto on: %d", s)
 	}
-	for _, tag := range []string{"v1.0.0", "fleet-v1.0.0-2-gabcdef0", "latest"} {
+	for _, tag := range []string{"fleet-v1.0.0", "v1.0.0-2-gabcdef0", "latest"} {
 		if s, _ := call(t, owner, "POST", "/api/update/install", map[string]any{"tag": tag}, nil); s != http.StatusBadRequest {
 			t.Errorf("tag %q: %d", tag, s)
 		}
@@ -104,9 +139,9 @@ func TestUpdateAutoOnAndInstallTag(t *testing.T) {
 		t.Fatalf("refused requests asked the owner (%d prompts)", n)
 	}
 	gateOn(t, owner)
-	body := map[string]any{"tag": "fleet-v0.2.0", "now": true}
+	body := map[string]any{"tag": "v0.2.0", "now": true}
 	s, conf := call(t, owner, "POST", "/api/update/install", body, nil)
-	if s != http.StatusPreconditionRequired || !strings.Contains(conf.Reason, "install the release fleet-v0.2.0 now") {
+	if s != http.StatusPreconditionRequired || !strings.Contains(conf.Reason, "install the release v0.2.0 now") {
 		t.Fatalf("without proof: %d %q", s, conf.Reason)
 	}
 	proof := confirmed(t, owner, conf)

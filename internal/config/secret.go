@@ -3,6 +3,7 @@ package config
 import (
 	"crypto/rand"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
@@ -53,11 +54,17 @@ func CreateSecretFile(path string) (*os.File, error) {
 	return createSecret(path)
 }
 
-// MkdirSecret creates a private secrets folder. Existing folders retain their permissions;
-// ownership cannot be inferred from a pathname. Unsafe paths fail closed.
+// MkdirSecret makes dir (a secrets folder) private to the current user. Unsafe paths fail
+// closed. A folder that already exists, from an older version, is made private too (Windows:
+// reprotectDir, only when that is safe), best effort: a failure is only logged, since each
+// secret file is private on its own.
 func MkdirSecret(dir string) error {
 	if err := mkdirSecret(dir); err != nil {
 		return err
+	}
+	if err := reprotectDir(dir); err != nil {
+		slog.Warn("config: cannot make the secrets folder private to this user; each secret file still is",
+			"dir", dir, "err", err)
 	}
 	return nil
 }

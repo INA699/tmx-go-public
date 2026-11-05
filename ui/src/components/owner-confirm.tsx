@@ -2,7 +2,9 @@
 // gated request). The UI proves nothing itself; it only waits for the daemon's verdict and lets
 // the owner withdraw the prompt. With the grace window on, it says that this proof also spares
 // the next prompts for a while (every proof opens or renews the window).
-// On a paired browser (method "pin") it asks for the owner PIN instead and sends it itself.
+// On a paired browser (method "pin") it asks for the owner PIN instead and sends it itself. At
+// the machine the OS prompt comes first; when the PIN may answer too, "Use my PIN instead"
+// switches to the PIN sheet (the OS prompt stays open: whichever answers first).
 import { useState } from "react";
 import { Fingerprint, KeyRound, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,8 +15,9 @@ import { useStore } from "@/lib/store";
 
 export function OwnerConfirmDialog() {
   const c = useGate((s) => s.confirming);
-  if (c?.method === "pin") return <PinConfirmDialog key={c.id} reason={c.reason} hello={!!c.hello} />;
-  return <OsConfirmDialog />;
+  const [pinFor, setPinFor] = useState<string | null>(null); // the confirmation the owner answers with the PIN
+  if (c && (c.method === "pin" || (c.pin && pinFor === c.id))) return <PinConfirmDialog key={c.id} reason={c.reason} hello={!!c.hello} />;
+  return <OsConfirmDialog onUsePin={c?.pin ? () => setPinFor(c.id) : undefined} />;
 }
 
 function PinConfirmDialog({ reason, hello }: { reason: string; hello: boolean }) {
@@ -67,7 +70,7 @@ function PinConfirmDialog({ reason, hello }: { reason: string; hello: boolean })
   );
 }
 
-function OsConfirmDialog() {
+function OsConfirmDialog({ onUsePin }: { onUsePin?: () => void }) {
   const c = useGate((s) => s.confirming);
   const platform = useStore((s) => s.transport?.platform);
   const where = platform === "darwin" || !platform ? "this Mac" : "this machine";
@@ -91,13 +94,19 @@ function OsConfirmDialog() {
         </div>
         {grace > 0 && (
           <p className="text-center text-xs text-balance text-muted-foreground">
-            tmx won't ask again for {graceLabel(grace)} on {where} (Settings → Safety).
+            Tiamatrix won't ask again for {graceLabel(grace)} on {where} (Settings → Safety).
           </p>
         )}
         <DialogFooter className="sm:justify-center">
           <Button variant="ghost" size="sm" onClick={() => void cancelConfirmation()}>
             Cancel
           </Button>
+          {onUsePin && (
+            <Button variant="outline" size="sm" onClick={onUsePin}>
+              <KeyRound className="size-3.5" />
+              Use my PIN instead
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

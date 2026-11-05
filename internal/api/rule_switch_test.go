@@ -15,7 +15,7 @@ type ruleRow struct {
 	AlwaysOn   string        `json:"always_on"`
 }
 
-// The owner's rule switches (3 Nov 22:14), acceptance 1, 2, 9 at the API: the defaults are listed;
+// The guard's rule switches, acceptance 1, 2, 9 at the API: the defaults are listed;
 // a flip needs the owner and a fresh proof, even with the gate off; agents and peers can't;
 // fixed carve-outs have no switch; the hook sees the flip.
 func TestRuleSwitchAPI(t *testing.T) {
@@ -37,7 +37,7 @@ func TestRuleSwitchAPI(t *testing.T) {
 	if r := rows[guard.RuleElevation]; r.State != guard.Hold || !r.Switchable {
 		t.Fatalf("elevation row: %+v", r)
 	}
-	if r := rows[guard.RuleKillByName]; r.State != guard.Allow || r.AlwaysOn == "" {
+	if r := rows[guard.RuleKillByName]; r.State != guard.Block || r.AlwaysOn == "" { // blocked by default; the switch may loosen it
 		t.Fatalf("kill-by-name row: %+v", r)
 	}
 	if r := rows[guard.RuleKillTmx]; r.State != guard.Block || r.Switchable {

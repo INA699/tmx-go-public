@@ -10,7 +10,7 @@ import (
 func TestRealBundle(t *testing.T) {
 	z := os.Getenv("TMX_TEST_APP_ZIP")
 	if z == "" {
-		t.Skip("set TMX_TEST_APP_ZIP to a tmxg-desktop_*_darwin_*.app.zip")
+		t.Skip("set TMX_TEST_APP_ZIP to a tmx-desktop_*_darwin_*.app.zip")
 	}
 	app, err := unzipBundle(z, t.TempDir())
 	if err != nil {
@@ -19,6 +19,6 @@ func TestRealBundle(t *testing.T) {
 	if err := codesignVerify(context.Background(), app); err != nil {
 		t.Fatal(err)
 	}
-	out, err := probe(context.Background(), app+"/Contents/MacOS/tmxg")
+	out, err := probe(context.Background(), app+"/Contents/MacOS/tmx")
 	t.Logf("unpacked %s; signature ok; version: %s %v", app, out, err)
 }

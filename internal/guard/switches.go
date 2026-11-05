@@ -1,6 +1,6 @@
 package guard
 
-// The fixed parts of the owner's rule switches (3 Nov 22:14): what stays blocked whatever the
+// The fixed parts of the rule switches: what stays blocked whatever the
 // switch says. Pure string matching on the command; nothing is run or looked up.
 
 import (
@@ -19,7 +19,7 @@ var tmxRuntime = map[string]bool{
 	"python": true, "python3": true, "pythonw": true, "py": true,
 	"bash": true, "sh": true, "zsh": true, "pwsh": true, "powershell": true, "cmd": true,
 	"conhost": true, "openconsole": true, "windowsterminal": true, "wt": true,
-	// the owner's way in: killing these by name can lock the owner out (reviewer, #232)
+	// the owner's way in: killing these by name can lock the owner out
 	"tailscale": true, "tailscaled": true, "tailscale-ipn": true, "sshd": true,
 }
 

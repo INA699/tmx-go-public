@@ -49,7 +49,7 @@ var claudeRealApproval = []string{"  ⎿  $ echo second >> gamma.txt", "", strin
 	` Tip: auto mode handles these prompts for you — choose "switch to auto mode" below`, "",
 	"   echo second >> gamma.txt", `   Append "second" to gamma.txt`, "", " Do you want to proceed?",
 	" ❯ 1. Yes",
-	`   2. Yes, and always allow access to C:\Users\user\Documents\tmx-sandbox from this project`,
+	`   2. Yes, and always allow access to C:\Users\owner\Documents\tmx-sandbox from this project`,
 	"   3. Yes, and switch to auto mode · auto mode handles these prompts for you", "   4. No", "",
 	" Esc to cancel · Tab to amend"}
 

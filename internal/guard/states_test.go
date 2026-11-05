@@ -25,10 +25,8 @@ func TestEveryRuleEveryState(t *testing.T) {
 }
 
 // Two holds: the non-rememberable one names the verdict, in either order (go-reviewer-o4, #241).
-// write-outside defaults to Allowed, so it is switched to Held here to make a real tie.
 func TestHoldTiePrefersTheNonRememberable(t *testing.T) {
 	held := DefaultStates()
-	held[RuleWriteOutside] = Hold
 	for _, order := range [][]string{{RuleWriteOutside, RulePermsOutside}, {RulePermsOutside, RuleWriteOutside}} {
 		a := newAnalyzer(Context{States: held})
 		for _, r := range order {
@@ -82,15 +80,23 @@ func TestFixedRulesIgnoreStates(t *testing.T) {
 	}
 }
 
-// No states (nil) = the strict built-in outcomes; the brief's defaults where it says so.
+// No states (nil) = the strict built-in outcomes, and the defaults are the same: every rule
+// starts at its own Outcome, so only the owner's switch loosens one.
 func TestDefaultsAndStrict(t *testing.T) {
 	want := map[string]Outcome{
-		RuleBrowser: Allow, RuleDisk: Block, RuleDeleteRoot: Block, RulePermsRoot: Block, RuleBoot: Block,
-		RuleKillByName: Allow, RuleShutdown: Allow, RuleTmxState: Allow, RuleTmxCLI: Hold,
-		RuleElevation: Hold, RulePipeShell: Allow,
-		// The owner's correction (22:16): the held list, Held for me / Allowed.
-		RuleBrowserMention: Allow, RuleWriteOutside: Allow, RuleClaudeConfig: Allow, RuleDesktop: Allow,
+		RuleBrowser: Block, RuleDisk: Block, RuleDeleteRoot: Block, RulePermsRoot: Block, RuleBoot: Block,
+		RuleKillByName: Block, RuleShutdown: Block, RuleTmxState: Block, RuleTmxCLI: Block,
+		RuleElevation: Hold, RulePipeShell: Hold,
+		RuleBrowserMention: Hold, RuleWriteOutside: Hold, RuleClaudeConfig: Hold, RuleDesktop: Hold,
 		RuleHelloKey: Hold, RuleNetwork: Hold, RuleDeleteOutside: Hold, RulePermsOutside: Hold, RuleGitRewrite: Hold,
+	}
+	for _, r := range Rules() {
+		if r.Default != r.Outcome || r.Default == Allow {
+			t.Errorf("%s defaults to %s (outcome %s)", r.ID, r.Default, r.Outcome)
+		}
+		if _, ok := want[r.ID]; !ok {
+			t.Errorf("%s: no expected default", r.ID)
+		}
 	}
 	d := DefaultStates()
 	for id, o := range want {

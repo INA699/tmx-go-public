@@ -1,12 +1,12 @@
 # Public CI for the scrubbed tmx-go snapshot. Runs on GitHub's free hosted runners only (never
-# self-hosted). Triggers: the mirror bot's pushes (fleet/main and pr/<N> snapshot branches) and
+# self-hosted). Triggers: the mirror bot's pushes (main and pr/<N> snapshot branches) and
 # outside PRs, which get no secrets (there are none here) and need maintainer approval to run.
 name: public CI
 on:
   push:
-    branches: [fleet/main, "pr/**"]
+    branches: [main, "pr/**"]
   pull_request:
-    branches: [fleet/main]
+    branches: [main]
   workflow_dispatch:
 permissions:
   contents: read
@@ -91,4 +91,4 @@ jobs:
       - run: make deps
       - name: make app (unsigned)
         run: make app WAILS="$WAILS" SIGN_IDENTITY=-
-      - run: codesign --verify --deep --strict build/bin/tmxg.app
+      - run: codesign --verify --deep --strict build/bin/tmx.app

@@ -627,7 +627,7 @@ func (g *fakeGitHub) publish(key ed25519.PrivateKey, files map[string][]byte) {
 		g.assets[name] = b
 	}
 	g.assets["SHA256SUMS"] = []byte(sums.String())
-	g.assets["SHA256SUMS.sig"] = []byte(update.FleetKeyID + ":" + base64.StdEncoding.EncodeToString(ed25519.Sign(key, []byte(update.FleetExtraSignatureContext+"\nblackcode-ch/tmx-go\n"+EngineRelease()+"\n"+sums.String()))) + "\n")
+	g.assets["SHA256SUMS.sig"] = []byte(base64.StdEncoding.EncodeToString(ed25519.Sign(key, []byte(sums.String()))) + "\n") // as whisper-engine.yml signs
 }
 
 func withGitHub(g *fakeGitHub, trusted ed25519.PublicKey, hf *httptest.Server) envOpt {

@@ -40,12 +40,28 @@ func defaultHome() (string, error) {
 	return OSDefaultHome()
 }
 
+// HomeName is the state folder's name under the per-OS base; LegacyHomeName is the one fleet
+// builds named "tmxg" used for a while. See homeIn.
+const (
+	HomeName       = "tmx-go"
+	LegacyHomeName = "tmxg-trial"
+)
+
 // OSDefaultHome is the per-OS state directory used when $TMXG_HOME is not set.
 func OSDefaultHome() (string, error) {
+	base, err := osHomeBase()
+	if err != nil {
+		return "", err
+	}
+	return homeIn(base), nil
+}
+
+// osHomeBase is the per-OS folder the state folder lives in.
+func osHomeBase() (string, error) {
 	switch runtime.GOOS {
 	case "windows":
 		if d := os.Getenv("LOCALAPPDATA"); d != "" {
-			return filepath.Join(d, "tmxg-trial"), nil
+			return d, nil
 		}
 		return "", errors.New("LOCALAPPDATA is not set")
 	case "darwin":
@@ -53,14 +69,31 @@ func OSDefaultHome() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return filepath.Join(home, "Library", "Application Support", "tmxg-trial"), nil
+		return filepath.Join(home, "Library", "Application Support"), nil
 	default:
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", err
 		}
-		return filepath.Join(home, ".local", "state", "tmxg-trial"), nil
+		return filepath.Join(home, ".local", "state"), nil
 	}
+}
+
+// homeIn picks the state folder under base: HomeName, unless only a LegacyHomeName folder is
+// there. Builds named "tmxg" kept their state in LegacyHomeName; such a machine keeps using it
+// in place rather than moving it, because the folder's path is part of its state (the Windows
+// gate marker is keyed by it, and the secrets folder's ACLs were set on it). Where both exist,
+// HomeName wins and the legacy folder is left alone.
+func homeIn(base string) string {
+	cur := filepath.Join(base, HomeName)
+	if _, err := os.Lstat(cur); err == nil {
+		return cur
+	}
+	legacy := filepath.Join(base, LegacyHomeName)
+	if fi, err := os.Lstat(legacy); err == nil && fi.IsDir() {
+		return legacy
+	}
+	return cur
 }
 
 // Resolve returns the Paths for DefaultHome and creates the directory.

@@ -469,8 +469,8 @@ func (s *Server) gateDecide(w http.ResponseWriter, r *http.Request, id string, r
 	if a, err := s.f.Agent(ap.AgentID); err == nil {
 		name = a.Name
 	}
-	// The owner, 3 Nov 22:30: no PIN to allow something already allowed once (same rule, tool and
-	// exact command). The card still waits for the owner's own tap; only the proof is skipped.
+	// No PIN to allow something already allowed once (same rule, tool and exact command). The
+	// card still waits for the owner's own tap; only the proof is skipped.
 	if req.Decision == "allow" && s.f.AllowedBefore(ap) {
 		return true
 	}

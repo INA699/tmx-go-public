@@ -48,8 +48,9 @@ type Recording struct {
 	// SystemAudio: the device's own sound (what its speakers play) was captured with the screen
 	// and mixed with the microphone; then every segment has a 16 kHz WAV too.
 	SystemAudio bool `json:"system_audio"`
-	// Sensitivity: SensitivityClinic = medical patient data (Metaesthetics, Aurea; nLPD): its report is written on
-	// our own machines only, and fails with the reason when there is no local model. "" = a cloud model may write it.
+	// Sensitivity: SensitivityLocalOnly = sensitive content that must stay on the owner's machines: its report is
+	// written by local models only, and fails with the reason when there is no local model. "" = a cloud model may
+	// write it.
 	Sensitivity string `json:"sensitivity,omitempty"`
 	// Dir is the recording's folder (absolute); every segment's files are in it.
 	Dir      string             `json:"dir"`
@@ -107,8 +108,9 @@ const (
 	EvRecordingRemoved = "recording.removed" // data: {"id"}
 )
 
-// SensitivityClinic marks a recording of medical patient data: local models only (nLPD).
-const SensitivityClinic = "clinic"
+// SensitivityLocalOnly marks a sensitive recording: its report is written by local models only. The stored and
+// API value is "clinic" (the name it was introduced under).
+const SensitivityLocalOnly = "clinic"
 
-// Clinic reports whether the recording holds clinic patient data (local models only).
-func (r Recording) Clinic() bool { return r.Sensitivity == SensitivityClinic }
+// LocalOnly reports whether the recording is marked sensitive (local models only).
+func (r Recording) LocalOnly() bool { return r.Sensitivity == SensitivityLocalOnly }

@@ -2,7 +2,7 @@
 .SYNOPSIS
   Update a Windows machine's tmx-go (daemon + desktop window) to an exact commit: build, test, swap, verify, roll back.
 .DESCRIPTION
-  Until fleet-v* releases exist this is a machine's update path. Steps:
+  The update path of a machine that runs a build from source rather than a v* release. Steps:
     1. fetch the commit in a build checkout, build the UI, the daemon and the window (NEVER -tags tmx_ci: that tag
        compiles the guard tests with destructive command strings and Windows Defender kills the process tree);
     2. run the targeted tests (go test -p 2 on the packages in -TestPackages);

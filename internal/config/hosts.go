@@ -20,26 +20,24 @@ type Host struct {
 // ValidHostName reports whether name is safe to use as a secret filename component.
 func ValidHostName(name string) bool { return hostNamePattern.MatchString(name) }
 
-// The port rule (issue #83; TRIAL.md, docs/trial-port.md), for every profile:
+// The port rule (issue #83; docs/trial-port.md), for every profile:
 //   - PortPythonV2 (8777): the Python v2 REST API (agents_v2/tmx_*.py). Never listened on and
 //     never sent a bearer token to as a Host: Python peers are reached through their own
 //     authenticated route (peers.go), not as a local Host.
-//   - PortLegacyHTTP (8787): an existing tmx-go v0.1.x daemon. This daemon never listens on it,
-//     but a configured Host may legitimately be that older local daemon.
 //   - 43911 and 4001: a v0.1.x install's secondary API and its libp2p port.
-const (
-	PortPythonV2   = 8777
-	PortLegacyHTTP = 8787
-)
+//
+// DefaultPort (8787) is this daemon's own port; a configured Host may be another local daemon on
+// it (one with a different state folder and port in its own config.json).
+const PortPythonV2 = 8777
 
 // reservedPorts may be neither listened on nor used as a Host port. Unexported: nothing outside
 // this package may reach in and weaken it.
 var reservedPorts = map[int]bool{PortPythonV2: true, 43911: true, 4001: true}
 
-// ValidListenPort reports whether this daemon may listen on port: in range and neither one of
-// reservedPorts nor PortLegacyHTTP.
+// ValidListenPort reports whether this daemon may listen on port: in range and not one of
+// reservedPorts.
 func ValidListenPort(port int) bool {
-	return port >= 1 && port <= 65535 && port != PortLegacyHTTP && !reservedPorts[port]
+	return port >= 1 && port <= 65535 && !reservedPorts[port]
 }
 
 // ValidHostPort reports whether port is safe for this daemon to send its bearer-token request

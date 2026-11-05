@@ -115,11 +115,12 @@ const screenCols, screenRows = 120, 32
 // (fleet control's "type"; callers follow the same tier rule as start/stop/restart - the owner
 // on anyone, a head or lead on its own subtree).
 //
-// The owner types as at the keyboard: raw bytes, anything goes. An agent's text is not
-// keystrokes (agentTypeText): it is delivered like mail, through Process.Send, so it can't
-// answer a menu, run a slash command or a shell escape, or change the TUI's permissions.
+// The owner types as at the keyboard: raw bytes, anything goes. An agent's or a peer machine's
+// text is not keystrokes (agentTypeText): it is delivered like mail, through Process.Send, so
+// it can't answer a menu, run a slash command or a shell escape, or change the TUI's
+// permissions.
 func (f *Fleet) TypeText(c Caller, idOrName, text string, submit bool) error {
-	if !c.Owner && c.Peer == "" {
+	if !c.Owner {
 		return f.agentTypeText(c, idOrName, text, submit)
 	}
 	proc, err := f.procForWriteAct(c, idOrName)
@@ -129,10 +130,6 @@ func (f *Fleet) TypeText(c Caller, idOrName, text string, submit bool) error {
 	if submit {
 		text += "\r"
 	}
-	// A peer writes raw text (unlike agentTypeText's mail-relay), but never with the owner's
-	// unguarded strength: Write(owner=true) skips the pending-approval/menu gate and a shell's
-	// owner-only refusal, which only the literal owner at the real keyboard may bypass
-	// (go-reviewer-o, #161 review - machine protection, rule 1).
 	if err := proc.Write([]byte(text), c.Owner); err != nil {
 		return writeActErr(err, idOrName)
 	}
@@ -173,9 +170,9 @@ func (f *Fleet) agentTypeText(c Caller, idOrName, text string, submit bool) erro
 		f.mu.Unlock()
 		return errf(KindConflict, "the owner typed into %s in the last %s; try again in %s", r.a.Name, TypingQuiet, wait.Round(time.Second))
 	}
-	line := f.mailLineLocked(model.Message{From: c.AgentID, Body: text})
+	line := f.mailLineLocked(model.Message{From: c.ID(), Body: text})
 	f.appendLocked(r, model.TimelineEntry{Kind: model.EntryMessageIn, Text: text,
-		Meta: map[string]any{"from": c.AgentID, "from_name": f.nameOfLocked(c.AgentID), "typed": true}})
+		Meta: map[string]any{"from": c.ID(), "from_name": f.nameOfLocked(c.ID()), "typed": true}})
 	f.mu.Unlock()
 	return proc.Send(line)
 }
@@ -217,30 +214,31 @@ func (f *Fleet) agentInputTargetLocked(c Caller, idOrName string) (*agentRec, ru
 
 // SendKeys presses one or more keys in an agent's terminal: named keys (enter, esc, ctrl+c,
 // up, down, shift+tab, ...) or single characters, space-separated (fleet control's "keys").
-// The owner may press any. A head or lead only esc and ctrl+c (runner.NonOwnerKey), into a
-// harness's TUI in terminal mode, and not while a menu is on its screen: every other key can
-// answer a menu, cycle the TUI's permission mode (shift+tab) or recall a command from history.
+// The owner may press any. A head or lead, or a peer machine, only esc and ctrl+c
+// (runner.NonOwnerKey), into a harness's TUI in terminal mode, and not while a menu is on its
+// screen: every other key can answer a menu, cycle the TUI's permission mode (shift+tab) or
+// recall a command from history.
 func (f *Fleet) SendKeys(c Caller, idOrName, keys string) error {
 	seqs, err := screen.Keys(keys)
 	if err != nil {
 		return errf(KindInvalid, "%s", err)
 	}
 	var proc runner.Process
-	if c.Owner || c.Peer != "" {
+	if c.Owner {
 		if proc, err = f.procForWriteAct(c, idOrName); err != nil {
 			return err
 		}
 	} else {
 		for i, seq := range seqs {
 			if !runner.NonOwnerKey(seq) {
-				return errf(KindForbidden, "an agent may press only esc and ctrl+c; only the owner can press %q", strings.Fields(keys)[i])
+				return errf(KindForbidden, "agents and other machines may press only esc and ctrl+c; only the owner can press %q", strings.Fields(keys)[i])
 			}
 		}
 		f.mu.Lock()
 		r, p, err := f.agentInputTargetLocked(c, idOrName)
 		if err == nil {
 			f.appendLocked(r, model.TimelineEntry{Kind: model.EntrySystem,
-				Text: fmt.Sprintf("%s pressed %s", f.nameOfLocked(c.AgentID), strings.Join(strings.Fields(keys), " "))})
+				Text: fmt.Sprintf("%s pressed %s", f.nameOfLocked(c.ID()), strings.Join(strings.Fields(keys), " "))})
 		}
 		f.mu.Unlock()
 		if err != nil {
@@ -249,8 +247,7 @@ func (f *Fleet) SendKeys(c Caller, idOrName, keys string) error {
 		proc = p
 	}
 	// Write(owner=true) is the literal owner's unguarded strength (skips the pending-approval/
-	// menu gate and a shell's owner-only refusal): never a peer, even though it may press any
-	// key, unlike a head or lead agent (go-reviewer-o, #161 review).
+	// menu gate and a shell's owner-only refusal): only the owner.
 	for _, seq := range seqs {
 		if err := proc.Write(seq, c.Owner); err != nil {
 			return writeActErr(err, idOrName)
@@ -340,7 +337,7 @@ func (f *Fleet) procForAct(c Caller, idOrName string) (runner.Process, error) {
 // human input, so mail waits TypingQuiet before it is typed into the same input box. Agents
 // go through agentInputTargetLocked instead.
 func (f *Fleet) procForWriteAct(c Caller, idOrName string) (runner.Process, error) {
-	if !c.Owner && c.Peer == "" {
+	if !c.Owner {
 		return nil, errf(KindForbidden, "only the owner types raw input")
 	}
 	f.mu.Lock()

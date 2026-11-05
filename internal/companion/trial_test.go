@@ -11,7 +11,15 @@ func TestTrialCompanionRequiresIsolatedHome(t *testing.T) {
 	if _, err := AIOSHome(); err != nil {
 		t.Fatal(err)
 	}
-	if Name != "tmxg" {
-		t.Fatal("Companion entry collides")
+	if Name != "tmx" {
+		t.Fatalf("Name = %q", Name)
+	}
+	for _, e := range []Entry{{ManagedBy: "tmxg"}, {Command: "/x/tmxg", Args: []string{"mcp", "--companion"}}, {Command: "/x/tmx.exe", Args: []string{"mcp", "--companion"}}} {
+		if !isOurs(e) {
+			t.Errorf("isOurs(%+v) = false", e)
+		}
+	}
+	if isOurs(Entry{Command: "/x/tmx-other", Args: []string{"mcp", "--companion"}}) {
+		t.Error("a foreign binary is ours")
 	}
 }

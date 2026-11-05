@@ -2,12 +2,8 @@ package fleet
 
 import "testing"
 
-// go-reviewer-o2's nil-record sweep, 3 Nov: callerRecLocked returns (nil, nil) for both the
-// owner and a peer machine (peers are owner-equivalent for agent-operation routes), but several
-// callers that pre-date peers only ever expected a nil record from the OWNER and then
-// dereference it unconditionally - a peer reaching them through servePeer's ordinary-mux
-// fallthrough panics instead of being refused. These two must refuse a peer outright, before
-// callerRecLocked ever runs.
+// A peer machine has no agent record here and is never the owner: these must refuse it, never
+// panic on a nil record (callerRecLocked refuses a peer too).
 
 func TestAskOwnerRefusesPeer(t *testing.T) {
 	e := newEnv(t)

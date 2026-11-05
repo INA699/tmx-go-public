@@ -162,7 +162,7 @@ export function VoiceSection() {
                 </p>
                 {s.engine.needs_token && (
                   <p className="mt-1 text-xs text-muted-foreground">
-                    The engine comes from tmx's private releases: add a GitHub token in{" "}
+                    The engine comes from Tiamatrix's private releases: add a GitHub token in{" "}
                     <button className="underline hover:text-foreground" onClick={() => navigate(paths.settings() + "?section=updates")}>
                       Settings → Updates
                     </button>

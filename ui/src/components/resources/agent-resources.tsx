@@ -131,7 +131,7 @@ export function AgentResourceBanner({ agent }: { agent: Agent }) {
       <Pause className="size-4 shrink-0 fill-current text-[color-mix(in_oklch,var(--state-waiting)_80%,var(--foreground))]" />
       <p className="min-w-0 flex-1 text-[0.8125rem]">
         <span className="font-medium">
-          Paused by tmx · {pauseLabel(agent)}
+          Paused by Tiamatrix · {pauseLabel(agent)}
           {agent.paused_at ? <span className="tabular font-normal text-muted-foreground"> · {relativeTime(agent.paused_at)}</span> : null}
         </span>
         <span className="block text-xs text-muted-foreground">

@@ -9,12 +9,18 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
-func TestDefaultListenersNotWildcard(t *testing.T) {
+// The default listeners bind every interface, so a contact on the LAN (mDNS) or a hole
+// punch can reach this node directly; a loopback-only default left relays as the only way
+// in. Only the address list is checked here: tests never bind 0.0.0.0 (firewall prompt).
+func TestDefaultListenersEveryInterface(t *testing.T) {
 	n := &Host{}
-	for _, a := range n.listenAddrs(1234) {
-		if strings.Contains(a, "0.0.0.0") || strings.Contains(a, "/::/") {
-			t.Errorf("wildcard listener: %s", a)
-		}
+	want := []string{"/ip4/0.0.0.0/udp/1234/quic-v1", "/ip4/0.0.0.0/tcp/1234", "/ip6/::/udp/1234/quic-v1", "/ip6/::/tcp/1234"}
+	if got := n.listenAddrs(1234); strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("default listeners %v, want %v", got, want)
+	}
+	n.opts.ListenAddrs = []string{"/ip4/127.0.0.1/tcp/0"}
+	if got := n.listenAddrs(1234); len(got) != 1 || got[0] != "/ip4/127.0.0.1/tcp/0" {
+		t.Fatalf("ListenAddrs did not replace the defaults: %v", got)
 	}
 }
 
@@ -27,8 +33,11 @@ func TestGaterNoDHTIPAdmissionWhenDHTOff(t *testing.T) {
 	}
 }
 
+// Without the DHT the node bootstraps nothing and dials nobody, but it is still a circuit
+// relay client (relays reached through a paired peer or p2p.relays, and the inbound side of
+// a relayed connection), as in 0c36197: relay and hole punching never depended on the DHT.
 // No state file, credentials or public sockets: inspect the running local protocol set.
-func TestNoBootstrapRelayHolePunchWithoutOptIn(t *testing.T) {
+func TestNoDHTWithoutOptInRelayClientStillOn(t *testing.T) {
 	key, _ := testKey(t)
 	n, err := New(Options{Key: key, AllowLoopback: true,
 		ListenAddrs: []string{"/ip4/127.0.0.1/tcp/0"},
@@ -38,12 +47,19 @@ func TestNoBootstrapRelayHolePunchWithoutOptIn(t *testing.T) {
 	}
 	defer n.Close()
 	if n.kad != nil || len(n.h.Network().Conns()) != 0 {
-		t.Fatal("private host started discovery or dialled a peer")
+		t.Fatal("a host without the DHT started discovery or dialled a peer")
 	}
+	stop := false
 	for _, p := range n.h.Mux().Protocols() {
-		if strings.Contains(string(p), "circuit") || strings.Contains(string(p), "dcutr") {
-			t.Errorf("unexpected relay/hole-punch protocol %s", p)
+		if strings.Contains(string(p), "circuit/relay/0.2.0/stop") {
+			stop = true
 		}
+		if strings.Contains(string(p), "circuit/relay/0.2.0/hop") {
+			t.Errorf("serving as a relay for others: %s", p)
+		}
+	}
+	if !stop {
+		t.Error("the circuit relay client is off without the DHT")
 	}
 	before := nowMs()
 	inv, err := n.CreateInvite(InviteOptions{Kind: InviteGroup, GroupID: "test-group"})
@@ -54,22 +70,24 @@ func TestNoBootstrapRelayHolePunchWithoutOptIn(t *testing.T) {
 		t.Fatalf("unbounded group invite: %+v", inv)
 	}
 }
-func TestInviteAdmissionWindowBounded(t *testing.T) {
+
+// An invite admits strangers for its whole stated lifetime (the UI shows "expires in 24 h"),
+// not only for a short window after it was created: the person it was sent to may open the
+// link hours later. Once it is used, revoked or expired, nobody new gets in.
+func TestInviteAdmitsForItsLifetime(t *testing.T) {
 	now := nowMs()
-	in := &inviteRec{CreatedAt: now - int64(3*time.Minute/time.Millisecond), Invite: Invite{ExpiresAt: now + int64(time.Hour/time.Millisecond), MaxUses: 1}}
+	in := &inviteRec{CreatedAt: now - int64(3*time.Hour/time.Millisecond), Invite: Invite{ExpiresAt: now + int64(time.Hour/time.Millisecond), MaxUses: 1}}
 	s := &state{Invites: []*inviteRec{in}}
-	if s.inviteOpen(now) {
-		t.Error("invite admits strangers after two minutes")
-	}
-	in.CreatedAt = now
 	if !s.inviteOpen(now) {
-		t.Error("fresh invite refused")
+		t.Error("an unexpired, unused invite created 3 hours ago refuses its joiner")
 	}
-	for _, created := range []int64{0, now + 1, now - (2 * time.Minute).Milliseconds()} {
-		in.CreatedAt = created
-		if s.inviteOpen(now) {
-			t.Errorf("invalid or elapsed admission window: created=%d", created)
-		}
+	in.ExpiresAt = now - 1
+	if s.inviteOpen(now) {
+		t.Error("an expired invite admits strangers")
+	}
+	in.ExpiresAt, in.Uses = now+int64(time.Hour/time.Millisecond), 1
+	if s.inviteOpen(now) {
+		t.Error("a used single-use invite admits strangers")
 	}
 }
 

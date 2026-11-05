@@ -153,11 +153,11 @@ func TestInstallUninstall(t *testing.T) {
 		t.Fatalf("status after install: %+v", st)
 	}
 	var e map[string]any
-	b, _ := os.ReadFile(filepath.Join(aios, "mcps", "tmxg", "mcp.json"))
+	b, _ := os.ReadFile(filepath.Join(aios, "mcps", "tmx", "mcp.json"))
 	if err := json.Unmarshal(b, &e); err != nil {
 		t.Fatal(err)
 	}
-	if e["type"] != "command" || e["command"] != exe || e["managed_by"] != "tmxg" || e["runtime"] != nil {
+	if e["type"] != "command" || e["command"] != exe || e["managed_by"] != "tmx" || e["runtime"] != nil {
 		t.Fatalf("entry: %v", e)
 	}
 	if args := fmt.Sprint(e["args"]); args != "[mcp --companion]" {
@@ -173,7 +173,7 @@ func TestInstallUninstall(t *testing.T) {
 	// The owner switched it off in Companion; a reinstall (new binary) keeps that.
 	e["enabled"] = false
 	b, _ = json.Marshal(e)
-	_ = os.WriteFile(filepath.Join(aios, "mcps", "tmxg", "mcp.json"), b, 0o644)
+	_ = os.WriteFile(filepath.Join(aios, "mcps", "tmx", "mcp.json"), b, 0o644)
 	o2 := o
 	o2.Executable = filepath.Join(t.TempDir(), "tmx2")
 	if st, _ := companion.ReadInstall(o2); st.Current || !st.Installed {
@@ -187,7 +187,7 @@ func TestInstallUninstall(t *testing.T) {
 	if err != nil || st.Installed || st.Skill {
 		t.Fatalf("uninstall: %+v %v", st, err)
 	}
-	if _, err := os.Stat(filepath.Join(aios, "mcps", "tmxg")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(aios, "mcps", "tmx")); !os.IsNotExist(err) {
 		t.Fatal("tmx's folder left behind")
 	}
 }
@@ -196,32 +196,32 @@ func TestInstallLeavesForeignEntriesAlone(t *testing.T) {
 	aios := t.TempDir()
 	o := companion.InstallOptions{AIOSHome: aios, Executable: filepath.Join(t.TempDir(), "tmx"), URL: "http://127.0.0.1:1", StateHome: "/s"}
 	foreign := []byte(`{"name":"Someone's tmx","type":"url","enabled":true,"url":"https://tmx.example/mcp"}`)
-	_ = os.MkdirAll(filepath.Join(aios, "mcps", "tmxg"), 0o755)
-	_ = os.WriteFile(filepath.Join(aios, "mcps", "tmxg", "mcp.json"), foreign, 0o644)
+	_ = os.MkdirAll(filepath.Join(aios, "mcps", "tmx"), 0o755)
+	_ = os.WriteFile(filepath.Join(aios, "mcps", "tmx", "mcp.json"), foreign, 0o644)
 	if _, err := companion.Install(o); !errors.Is(err, companion.ErrForeign) {
 		t.Fatalf("install over a foreign entry: %v", err)
 	}
 	if st, _ := companion.Uninstall(o); !st.Foreign {
 		t.Fatalf("status: %+v", st)
 	}
-	if b, _ := os.ReadFile(filepath.Join(aios, "mcps", "tmxg", "mcp.json")); string(b) != string(foreign) {
+	if b, _ := os.ReadFile(filepath.Join(aios, "mcps", "tmx", "mcp.json")); string(b) != string(foreign) {
 		t.Fatalf("foreign entry changed: %s", b)
 	}
 	// A foreign skill blocks too, and survives an uninstall.
 	aios2 := t.TempDir()
 	o.AIOSHome = aios2
-	_ = os.MkdirAll(filepath.Join(aios2, "skills", "tmxg"), 0o755)
-	_ = os.WriteFile(filepath.Join(aios2, "skills", "tmxg", "SKILL.md"), []byte("---\nname: tmx\n---\nmine"), 0o644)
+	_ = os.MkdirAll(filepath.Join(aios2, "skills", "tmx"), 0o755)
+	_ = os.WriteFile(filepath.Join(aios2, "skills", "tmx", "SKILL.md"), []byte("---\nname: tmx\n---\nmine"), 0o644)
 	if _, err := companion.Install(o); !errors.Is(err, companion.ErrForeign) {
 		t.Fatalf("install over a foreign skill: %v", err)
 	}
 	if _, err := companion.Uninstall(o); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(filepath.Join(aios2, "skills", "tmxg", "SKILL.md")); string(b) != "---\nname: tmx\n---\nmine" {
+	if b, _ := os.ReadFile(filepath.Join(aios2, "skills", "tmx", "SKILL.md")); string(b) != "---\nname: tmx\n---\nmine" {
 		t.Fatalf("foreign skill changed: %s", b)
 	}
-	if _, err := os.Stat(filepath.Join(aios2, "mcps", "tmxg")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(aios2, "mcps", "tmx")); !os.IsNotExist(err) {
 		t.Fatal("install wrote its entry despite the foreign skill")
 	}
 }

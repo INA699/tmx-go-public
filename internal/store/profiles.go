@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"encoding/json"
+	"strings"
 
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
@@ -50,6 +51,41 @@ func (s *Store) PutProfile(p model.Profile) error {
 func (s *Store) DeleteProfile(slug string) error {
 	_, err := s.db.Exec(`DELETE FROM profiles WHERE slug = ?`, slug)
 	return err
+}
+
+// RenameLegacyMCPTools rewrites the tool names in stored profiles that builds named tmxg wrote
+// (mcp__tmxg__send in instructions, mcp__tmxg in allowed or disallowed tools) to the server's
+// name, mcp__tmx: the old names no longer exist, so the text would point agents at nothing.
+// Idempotent; it touches only profiles that still name the old server.
+func (s *Store) RenameLegacyMCPTools() error {
+	list, err := s.ListProfiles()
+	if err != nil {
+		return err
+	}
+	const legacy, current = "mcp__tmxg", "mcp__tmx"
+	fix := func(xs []string) bool {
+		changed := false
+		for i, x := range xs {
+			if strings.HasPrefix(x, legacy) {
+				xs[i], changed = current+strings.TrimPrefix(x, legacy), true
+			}
+		}
+		return changed
+	}
+	for _, p := range list {
+		changed := strings.Contains(p.Instructions, legacy)
+		p.Instructions = strings.ReplaceAll(p.Instructions, legacy, current)
+		changed = fix(p.AllowedTools) || changed
+		changed = fix(p.DisallowedTools) || changed
+		if !changed {
+			continue
+		}
+		p.UpdatedAt = model.Now()
+		if err := s.PutProfile(p); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // UpgradeModelDefaults changes only untouched pre-ladder defaults, once per store.

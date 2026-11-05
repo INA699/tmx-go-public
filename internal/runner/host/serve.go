@@ -163,6 +163,7 @@ func (h *host) start(spec Spec) error {
 			return fmt.Errorf("start %s: %w", spec.Path, err)
 		}
 		ptyproc.AfterStart(pt)
+		sysinfo.RegisterChild(cmd.Process.Pid, false) // so a stop ends its tree, as below
 		h.pt, h.pcmd, h.stdout, h.pid = pt, cmd, pt, cmd.Process.Pid
 		return nil
 	}
@@ -183,6 +184,10 @@ func (h *host) start(spec Spec) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start %s: %w", spec.Path, err)
 	}
+	// The host is the program's parent: registered, a stop on Windows (no process groups) ends
+	// the program's whole verified tree (sysinfo.KillStarted), e.g. the node a .cmd shim ran,
+	// not only the program itself.
+	sysinfo.RegisterChild(cmd.Process.Pid, false)
 	h.cmd, h.stdin, h.stdout, h.pid = cmd, stdin, stdout, cmd.Process.Pid
 	return nil
 }

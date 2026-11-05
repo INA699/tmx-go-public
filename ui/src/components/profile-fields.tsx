@@ -212,7 +212,7 @@ export function InstructionsPreview({
           ),
         )}
         <div className="mt-3 border-t border-dashed pt-2.5 text-muted-foreground">
-          <div className="mb-1 font-sans text-2xs font-medium tracking-wide text-subtle-foreground uppercase">Added by tmx</div>
+          <div className="mb-1 font-sans text-2xs font-medium tracking-wide text-subtle-foreground uppercase">Added by Tiamatrix</div>
           {fixed.join("\n")}
         </div>
       </div>

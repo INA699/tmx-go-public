@@ -18,7 +18,7 @@ func stubAndReal() (name, stub, real string) {
 	return "codex", "#!/bin/sh\nexit 78\n", "#!/bin/sh\nexec node codex.js \"$@\"\n"
 }
 
-// Hostb's PATH: the production stub folder first, the real codex after it (npm's folder).
+// A production PATH: the stub folder first, the real codex after it (npm's folder).
 func TestSignInPathSkipsStub(t *testing.T) {
 	name, stub, real := stubAndReal()
 	stubs, npm := t.TempDir(), t.TempDir()

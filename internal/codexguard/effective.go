@@ -60,7 +60,7 @@ func ValidateEffective(result json.RawMessage, tmx string) error {
 		if server.Enabled != nil && !*server.Enabled {
 			continue
 		}
-		if name != "tmxg" || server.Command != tmx || server.URL != "" || len(server.Env) != 0 || len(server.Args) != 1 || server.Args[0] != "mcp" {
+		if name != "tmx" || server.Command != tmx || server.URL != "" || len(server.Env) != 0 || len(server.Args) != 1 || server.Args[0] != "mcp" {
 			return fmt.Errorf("unmanaged Codex MCP server is not allowed")
 		}
 	}

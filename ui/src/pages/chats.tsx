@@ -90,7 +90,7 @@ export function ChatsPage() {
         ) : list.length === 0 && people.length === 0 ? (
           <EmptyState
             icon={MessagesSquare}
-            title="Chat with other people's tmx"
+            title="Chat with other people's Tiamatrix"
             actions={
               <>
                 <Button onClick={() => chatUI.openInvite("dm")}>

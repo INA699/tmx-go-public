@@ -83,7 +83,7 @@ type Options struct {
 
 	HTTP    *http.Client
 	APIBase string   // default https://api.github.com
-	Keys    []string // test-injected fleet keys (base64 Ed25519); nil = update.fleet_keys / fleet_public_key
+	Keys    []string // the owner's release keys (base64 Ed25519); nil = keys.go (tests replace them)
 	// Probe runs "<exe> version"; VerifyBundle checks a .app's code signature (tests replace them).
 	Probe        func(ctx context.Context, exe string) (string, error)
 	VerifyBundle func(ctx context.Context, bundle string) error
@@ -130,6 +130,9 @@ func New(o Options) *Updater {
 	}
 	if o.APIBase == "" {
 		o.APIBase = "https://api.github.com"
+	}
+	if o.Keys == nil {
+		o.Keys = releaseKeys
 	}
 	if o.Probe == nil {
 		o.Probe = probe
@@ -368,12 +371,13 @@ func (u *Updater) checkRelease(ctx context.Context, allowAutoInstall bool) Statu
 	return st
 }
 
-// releaseVersion accepts only fleet tags, never versions inferred from filenames.
+// releaseVersion accepts only v* release tags, never versions inferred from file names (the
+// rolling "latest" release of older builds is not one).
 func (u *Updater) releaseVersion(r release) (Version, error) {
 	if v, ok := ParseVersion(r.TagName); ok && !r.Draft {
 		return v, nil
 	}
-	return Version{}, errors.New("release " + r.TagName + " is not a fleet release")
+	return Version{}, errors.New("release " + r.TagName + " is not a tmx release (vX.Y.Z)")
 }
 
 // explain turns an error into the sentence the owner sees.
@@ -400,12 +404,12 @@ func (u *Updater) Install(now bool) {
 	}
 }
 
-// InstallTag installs exactly the release tag (a published fleet release on this channel: an rc
+// InstallTag installs exactly the release tag (a published v* release on this channel: an rc
 // only on "latest"), verified like any other, and only when it is newer than the running version
 // (no downgrade). It checks at once, so an unknown, unpublished or older tag is refused here.
 func (u *Updater) InstallTag(ctx context.Context, tag string, now bool) (Status, error) {
 	if v, ok := ParseVersion(tag); !ok || v.Ahead != 0 {
-		return u.Status(), fmt.Errorf("%q is not a fleet release tag (fleet-vX.Y.Z or fleet-vX.Y.Z-rcN)", tag)
+		return u.Status(), fmt.Errorf("%q is not a release tag (vX.Y.Z or vX.Y.Z-rcN)", tag)
 	}
 	u.mu.Lock()
 	if u.want != "" && u.want != tag {

@@ -15,11 +15,18 @@ import (
 )
 
 // Release integrity: CI writes SHA256SUMS (one "hash  name" line per file of the release) and
-// SHA256SUMS.sig. An install accepts a download only when SHA256SUMS carries the signatures the
-// require policy asks for, by keys pinned in update.fleet_keys (config.UpdateConfig.PinnedKeys),
-// and the download's SHA-256 is the one SHA256SUMS lists.
+// SHA256SUMS.sig. An install accepts a download only when SHA256SUMS carries a valid signature of
+// a key it trusts and the download's SHA-256 is the one SHA256SUMS lists. SHA256SUMS.sig comes in
+// one of two formats:
 //
-// SHA256SUMS.sig holds one signature per line (at most maxSigLines):
+// The owner's (scripts/release-sums.sh; every release since v0.1.0 and the voice engine): one
+// line, the base64 Ed25519 signature of the exact SHA256SUMS bytes (an OpenSSL "pkeyutl -sign
+// -rawin") by one of the owner's release keys compiled into this build (keys.go). Its tag is
+// bound through SHA256SUMS: the file an install looks for there carries the version in its name.
+// This is the only format installs up to v0.1.10 read, so every owner release keeps it.
+//
+// The extra keys' (only when the owner pinned extra keys in update.fleet_keys; none by default),
+// one signature per line (at most maxSigLines):
 //
 //	<key id>:<type>:<base64 payload>   type "ed25519" or "webauthn"
 //	<key id>:<base64 signature>        the original form, an ed25519 signature
@@ -33,7 +40,9 @@ import (
 //
 // A line that does not parse makes the whole file invalid. A line naming a key or type that is
 // not pinned, or whose signature does not verify, counts for nothing; the release passes only
-// when every required type has at least one valid signature by a pinned key of that type.
+// when every type update.require lists has at least one valid signature by a pinned key of that
+// type. The require policy is for the extra keys only: it never blocks the owner's signature.
+// The two formats cannot be confused: base64 has no ':' and every extra-key line has one.
 
 var errUnsigned = errors.New("the release is not signed with a key this tmx knows")
 
@@ -50,27 +59,23 @@ type pinnedKey struct {
 	origin   string
 }
 
-// keySet is the decoded pinned set plus the require policy.
+// keySet is what an install trusts: the owner's release keys (the original format) and the
+// decoded pinned extra keys plus their require policy (the extra keys' format).
 type keySet struct {
+	release []ed25519.PublicKey
 	keys    []pinnedKey
 	require []string
 }
 
-func (ks keySet) empty() bool { return len(ks.keys) == 0 }
+func (ks keySet) empty() bool { return len(ks.release) == 0 && len(ks.keys) == 0 }
 
-const upstreamKeyHash = "507f6209f615997ed3deaa7391822230a1322893782946699173847af1ce7014"
-
-// newKeySet decodes validated config keys.
+// newKeySet decodes validated config keys (the pinned extra keys).
 func newKeySet(keys []config.FleetKey, require []string) (keySet, error) {
 	ks := keySet{require: require}
 	for _, k := range keys {
 		raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(k.Key))
 		if err != nil {
 			return keySet{}, errors.New("invalid fleet public key")
-		}
-		// Explicitly reject the known upstream signing identity, even if misconfigured.
-		if fmt.Sprintf("%x", sha256.Sum256(raw)) == upstreamKeyHash {
-			return keySet{}, errors.New("upstream release key is not a fleet key")
 		}
 		p := pinnedKey{id: k.ID, typ: k.Type}
 		switch k.Type {
@@ -95,13 +100,17 @@ func newKeySet(keys []config.FleetKey, require []string) (keySet, error) {
 	return ks, nil
 }
 
-// publicKeys builds a set of base64 Ed25519 keys under FleetKeyID (the Options.Keys seam).
-func publicKeys(b64 []string) (keySet, error) {
-	var ks []config.FleetKey
+// publicKeys decodes the owner's release keys (base64 Ed25519; keys.go or Options.Keys).
+func publicKeys(b64 []string) ([]ed25519.PublicKey, error) {
+	var out []ed25519.PublicKey
 	for _, k := range b64 {
-		ks = append(ks, config.FleetKey{ID: FleetKeyID, Type: config.KeyEd25519, Key: k})
+		raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(k))
+		if err != nil || len(raw) != ed25519.PublicKeySize {
+			return nil, fmt.Errorf("bad release key %q", k)
+		}
+		out = append(out, ed25519.PublicKey(raw))
 	}
-	return newKeySet(ks, []string{config.KeyEd25519})
+	return out, nil
 }
 
 func signatureMessage(purpose, repo, tag string, sums []byte) []byte {
@@ -170,9 +179,41 @@ func parseSigFile(b []byte) ([]sigLine, error) {
 	return out, nil
 }
 
-// verifySums checks sig over the fleet context and sums against the pinned set and its policy.
+// ownerSig returns the signature of a SHA256SUMS.sig in the owner's format: one line, no ':'.
+// ok is false for the extra keys' format; err is set when it is the owner's format but not a
+// signature.
+func ownerSig(b []byte) (sig []byte, ok bool, err error) {
+	s := strings.TrimSpace(string(b))
+	if s == "" || strings.Contains(s, ":") {
+		return nil, false, nil
+	}
+	raw, err := base64.StdEncoding.DecodeString(s)
+	if err != nil || len(raw) != ed25519.SignatureSize {
+		return nil, true, errBadSig
+	}
+	return raw, true, nil
+}
+
+// verifySums checks sig over sums: the owner's signature of sums by a release key, or the extra
+// keys' signatures of the purpose, repository, tag and sums under their policy (see above). A
+// rotation statement (FleetKeysContext) is for the extra keys only, so it never takes the
+// owner's format.
 func verifySums(purpose, repo, tag string, sums, sig []byte, ks keySet) error {
-	if repo == "" || tag == "" || strings.ContainsAny(repo+tag, "\r\n") || ks.empty() {
+	if raw, ok, err := ownerSig(sig); ok {
+		if err != nil {
+			return err
+		}
+		if purpose == FleetKeysContext {
+			return errUnsigned
+		}
+		for _, k := range ks.release {
+			if ed25519.Verify(k, sums, raw) {
+				return nil
+			}
+		}
+		return errUnsigned
+	}
+	if repo == "" || tag == "" || strings.ContainsAny(repo+tag, "\r\n") || len(ks.keys) == 0 {
 		return errUnsigned
 	}
 	lines, err := parseSigFile(sig)

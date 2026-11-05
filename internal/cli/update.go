@@ -25,9 +25,11 @@ const updateUsage = `usage: tmx update                 check; a newer release in
        tmx update install TAG     install exactly TAG once no agent is busy (a published release, newer than this one)
        tmx update status
        tmx update auto off        automatic installs are off in this version (a lead installs each machine)
-       tmx update keys            the release keys this machine trusts (fingerprints)
+       tmx update keys            the release keys this machine trusts (fingerprints): the built-in
+                                  release key and any extra keys pinned here (none by default)
        tmx update keys pin ID:BASE64... [--require ed25519[,webauthn]] | --file KEYS.json
-                                  replace them (ed25519 keys; --file: {fleet_keys, require} incl. webauthn)
+                                  replace the extra keys (ed25519 keys; --file: {fleet_keys, require} incl. webauthn)
+       tmx update keys clear      drop every extra key (the built-in release key stays)
        tmx update channel stable|latest
        tmx update token TOKEN|-   GitHub token for a private release repository (- removes it)
        tmx update drill-rollback on|off
@@ -160,8 +162,8 @@ func describeUpdate(st update.Status) string {
 	return b.String()
 }
 
-// updateKeys shows or replaces the pinned release keys (PUT /api/update/keys: always a fresh
-// owner proof). Only public keys and their fingerprints are printed.
+// updateKeys shows the release keys, or replaces the pinned extra keys (PUT /api/update/keys:
+// always a fresh owner proof). Only public keys and their fingerprints are printed.
 func updateKeys(e *env, c *client.Client, cx context.Context, args []string) error {
 	var got update.PinnedKeys
 	if len(args) == 0 || (len(args) == 1 && args[0] == "show") {
@@ -171,12 +173,20 @@ func updateKeys(e *env, c *client.Client, cx context.Context, args []string) err
 		fmt.Fprintln(e.out, describeKeys(got))
 		return nil
 	}
-	if args[0] != "pin" {
-		return usageErr(updateUsage)
-	}
 	var req struct {
 		FleetKeys []config.FleetKey `json:"fleet_keys"`
 		Require   []string          `json:"require,omitempty"`
+	}
+	if len(args) == 1 && args[0] == "clear" {
+		req.FleetKeys = []config.FleetKey{}
+		if err := ownerDo(e, c, cx, http.MethodPut, "/api/update/keys", req, &got); err != nil {
+			return err
+		}
+		fmt.Fprintln(e.out, describeKeys(got))
+		return nil
+	}
+	if args[0] != "pin" {
+		return usageErr(updateUsage)
 	}
 	rest := args[1:]
 	switch {
@@ -219,12 +229,19 @@ func updateKeys(e *env, c *client.Client, cx context.Context, args []string) err
 
 func describeKeys(p update.PinnedKeys) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "trusted release keys (require %s, rotation serial %d):", strings.Join(p.Require, "+"), p.KeysSerial)
+	b.WriteString("trusted release keys, built in:")
+	for _, k := range p.ReleaseKeys {
+		fmt.Fprintf(&b, "\n  release  ed25519  %s", keyFingerprint(k))
+	}
+	if len(p.ReleaseKeys) == 0 {
+		b.WriteString("\n  none")
+	}
+	fmt.Fprintf(&b, "\nextra keys pinned on this machine (require %s, rotation serial %d):", strings.Join(p.Require, "+"), p.KeysSerial)
 	for _, k := range p.FleetKeys {
 		fmt.Fprintf(&b, "\n  %s  %s  %s", k.ID, k.Type, keyFingerprint(k.Key))
 	}
 	if len(p.FleetKeys) == 0 {
-		b.WriteString("\n  none: every release is refused")
+		b.WriteString("\n  none")
 	}
 	if p.Error != "" {
 		fmt.Fprintf(&b, "\nupdates are off: %s", p.Error)

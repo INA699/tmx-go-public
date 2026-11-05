@@ -70,7 +70,8 @@ func TestUpgradeKeepsHelloAndAddsPIN(t *testing.T) {
 
 	a := Action{Reason: "delete x", Key: "k", Caller: "ui-1", Owner: true}
 	c := need(t, g, a)
-	if !c.PIN || !c.Hello || c.Method != "pin" {
+	// The OS prompt first (its method), the PIN the fallback.
+	if !c.PIN || !c.Hello || c.Method != f.Method() {
 		t.Fatalf("confirmation ways: %+v", c)
 	}
 	if err := g.ConfirmWithPIN(c.ID, "someone-else"); !errors.Is(err, ErrNoSuchConfirmation) {
@@ -137,7 +138,7 @@ func TestPINOnlyAndHelloUnavailable(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := need(t, g, Action{Reason: "delete x", Key: "k", Caller: "ui-1"})
-	if !c.PIN || c.Hello {
+	if !c.PIN || c.Hello || c.Method != "pin" {
 		t.Fatalf("shortcut off: %+v", c)
 	}
 	if err := g.ConfirmWithPIN(c.ID, "ui-1"); err != nil {
@@ -163,19 +164,56 @@ func TestPINOnlyAndHelloUnavailable(t *testing.T) {
 	}
 }
 
-// A new install starts with the shortcut off and writes it down; the choice survives a restart.
-func TestNewInstallHelloOffAndPersists(t *testing.T) {
+// A new install offers the OS prompt first where the platform has one (the PIN the
+// fallback); turning it off is written down and survives a restart, and so does turning it on.
+func TestNewInstallHelloOnAndPersists(t *testing.T) {
 	pin := true
-	g, p := gateWith(t, &Fake{}, nil, &pin)
-	if g.HelloShortcut() {
-		t.Fatal("a new install offers Windows Hello")
+	f := &Fake{Answer: waitForPrompt}
+	g, p := gateWith(t, f, nil, &pin)
+	if !g.HelloShortcut() {
+		t.Fatal("a new install does not offer Windows Hello / Touch ID")
+	}
+	if err := g.SetEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+	c := need(t, g, Action{Reason: "delete x", Key: "k", Caller: "ui-1"})
+	if !c.Hello || !c.PIN || c.Method != f.Method() {
+		t.Fatalf("new install with a PIN: %+v", c)
+	}
+	g.Cancel(c.ID)
+	settled(t, g, c.ID)
+	if err := g.SetHelloShortcut(false); err != nil {
+		t.Fatal(err)
+	}
+	if New(p, &Fake{}, nil, FileMarker(p.Home+"/test-marker")).HelloShortcut() {
+		t.Fatal("the PIN-only choice was lost on restart")
 	}
 	if err := g.SetHelloShortcut(true); err != nil {
 		t.Fatal(err)
 	}
-	again := New(p, &Fake{}, nil, FileMarker(p.Home+"/test-marker"))
-	if !again.HelloShortcut() {
+	if !New(p, &Fake{}, nil, FileMarker(p.Home+"/test-marker")).HelloShortcut() {
 		t.Fatal("the shortcut was lost on restart")
+	}
+}
+
+// A fleet build wrote "hello_shortcut": false at first start: the PIN keeps working there, and
+// the owner can turn the OS prompt back on.
+func TestFleetInstallWithPINOnlyKeepsWorking(t *testing.T) {
+	pin := true
+	f := &Fake{}
+	g, _ := gateWith(t, f, []byte(`{"enabled":true,"hello_shortcut":false}`), &pin)
+	c := need(t, g, Action{Reason: "delete x", Key: "k", Caller: "ui-1"})
+	if !c.PIN || c.Hello || c.Method != "pin" {
+		t.Fatalf("PIN-only install: %+v", c)
+	}
+	if err := g.ConfirmWithPIN(c.ID, "ui-1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := settled(t, g, c.ID); got.State != StateConfirmed {
+		t.Fatalf("after the PIN: %+v", got)
+	}
+	if err := g.SetHelloShortcut(true); err != nil || !g.HelloShortcut() {
+		t.Fatal(err)
 	}
 }
 

@@ -20,7 +20,6 @@ func (f *Fleet) Start() error {
 	}
 
 	f.mu.Lock()
-	f.applyRuleDefaultsLocked() // log the rule-switch defaults once (the owner, 3 Nov 22:14)
 	for i := range pending {
 		if pending[i].Kind == model.ApprovalPermission || pending[i].Kind == model.ApprovalGuard {
 			f.finishApprovalLocked(&pending[i], model.ApprovalExpired, "")

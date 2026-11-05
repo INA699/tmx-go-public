@@ -21,7 +21,7 @@ var aclCalls = map[string]bool{
 	"SetSecurityInfo": true, "SetFileSecurity": true, "SetSecurityDescriptorDacl": true,
 	"CreateDirectory": true, "secretSD": true, "securityAttributes": true,
 	"MkdirSecret": true, "mkdirSecret": true, "createSecret": true,
-	"CreateSecretFile": true, "WriteSecretFile": true,
+	"CreateSecretFile": true, "WriteSecretFile": true, "reprotectDir": true,
 }
 
 func needsACLTag(source string) (bool, error) {

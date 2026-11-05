@@ -117,7 +117,7 @@ export function JoinDialog() {
               )}
               <div className="min-w-0">
                 <p className="truncate text-[0.875rem] font-medium">
-                  {group ? `Join group “${preview.group_name || "Unnamed"}” by ${preview.name}` : `Join ${preview.name}'s tmx`}
+                  {group ? `Join group “${preview.group_name || "Unnamed"}” by ${preview.name}` : `Join ${preview.name}'s Tiamatrix`}
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {group

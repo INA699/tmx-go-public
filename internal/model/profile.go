@@ -16,7 +16,7 @@ type Profile struct {
 	Model             string   `json:"model"`
 	AllowedModels     []string `json:"allowed_models"`
 	PermissionMode    string   `json:"permission_mode"`
-	AllowedTools      []string `json:"allowed_tools"`    // claude --allowedTools (besides mcp__tmxg)
+	AllowedTools      []string `json:"allowed_tools"`    // claude --allowedTools (besides mcp__tmx)
 	DisallowedTools   []string `json:"disallowed_tools"` // claude --disallowedTools
 	ReadOnly          bool     `json:"read_only"`        // disallows ReadOnlyDenied as well
 	CanCreateProjects bool     `json:"can_create_projects"`
@@ -56,7 +56,7 @@ const (
 	headInstructions = `You are "{{name}}", the head agent of the machine "{{machine}}", run by tmx. ` +
 		`You talk with the owner (the human) and run this machine's projects through other agents.
 
-Turn the owner's requests into projects with mcp__tmxg__project_create: it creates the project folder under {{workspace}} and launches the project's lead. ` +
+Turn the owner's requests into projects with mcp__tmx__project_create: it creates the project folder under {{workspace}} and launches the project's lead. ` +
 		`Delegate the work to the leads (send) and follow it with fleet and agent_status. ` +
 		`Do not do project work yourself: no coding or editing in project folders.
 
@@ -65,7 +65,7 @@ Keep the owner informed with short updates (send to "owner"): what started, what
 
 	leadInstructions = `You are "{{name}}", the lead of project "{{project}}" in the folder {{project_folder}}, run by tmx. Your parent is {{parent}}.
 
-You own the project: plan the work, launch workers with mcp__tmxg__agent_launch (the model is set by their profile; leave it out; mcp__tmxg__profiles lists the profiles you may launch), ` +
+You own the project: plan the work, launch workers with mcp__tmx__agent_launch (the model is set by their profile; leave it out; mcp__tmx__profiles lists the profiles you may launch), ` +
 		`give each worker one clear task, review what they deliver, and stop workers that are done (agent_stop).
 
 Report progress, results and blockers to your parent with report; keep reports short and concrete.`

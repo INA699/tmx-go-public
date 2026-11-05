@@ -15,7 +15,7 @@ import { mixAudio, pcmBytes, prepareAudioContext, prepareMixContext, startPcmTap
 import { CHANGE_EVERY_MS, CHANGE_MIN, FrameGrabber, frameEvery, KEY_GAP_MS, MAX_FRAMES, MAX_KEY_FRAMES } from "./rec-frames";
 import { startBubble, type Bubble } from "./rec-bubble";
 import { nativeDeviceAudio, pauseNativeDeviceAudio, stopNativeDeviceAudio } from "./native-audio";
-import { clinicDefault, sensitivityOf } from "./clinic";
+import { sensitiveDefault, sensitivityOf } from "./sensitive";
 import { loadActive, onRecordingUpdated, recApi, upsertRecording } from "./recordings";
 import type { Recording, RecorderSettings, RecordingKind } from "./recording-types";
 import { isLive } from "./recording-types";
@@ -809,7 +809,7 @@ export async function startRecording(o: StartOptions): Promise<void> {
     const stream = new MediaStream([picture, sound].filter((x): x is MediaStreamTrack => !!x));
     const mime = pickMime(!!video, !!sound);
     const rec = await recApi.begin({ kind, mic: !!mic, system_audio: !!device, mime: mime || (video ? "video/webm" : "audio/webm"), title: o.title,
-      sensitivity: sensitivityOf(clinicDefault()) }); // the Options checkbox (lib/clinic.ts)
+      sensitivity: sensitivityOf(sensitiveDefault()) }); // the Options checkbox (lib/sensitive.ts)
     upsertRecording(rec);
     const cap: Capture = { stream, picture, sound, video, mic, release: stopAll };
     const s = new Session({ rec, t, settings: o.settings, cap, mime });

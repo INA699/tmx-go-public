@@ -7,28 +7,21 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// The owner's rule switches (3 Nov 22:14): only the owner flips a rule; fixed carve-outs have no
+// The guard's rule switches: only the owner flips a rule; fixed carve-outs have no
 // switch; every flip is logged; holds and blocks follow the current state; a restart keeps it.
 func TestRuleSwitches(t *testing.T) {
 	e := newEnv(t)
 	f := e.started()
 
-	// Upgrade: the defaults are applied once and logged by tmx.
+	// No upgrade step: a start neither switches nor logs anything; every rule is at its Outcome.
 	s := f.GuardSettings()
-	if s.DefaultsVersion != guard.DefaultsVersion || len(s.RuleLog) == 0 {
-		t.Fatalf("defaults not recorded: v%d, %d log entries", s.DefaultsVersion, len(s.RuleLog))
+	if len(s.RuleLog) != 0 || len(s.RuleStates) != 0 {
+		t.Fatalf("a start changed the switches: %v, log %+v", s.RuleStates, s.RuleLog)
 	}
-	for _, ch := range s.RuleLog {
-		if ch.By != "tmx" || ch.Old == ch.New {
-			t.Fatalf("upgrade log entry: %+v", ch)
+	for _, r := range guard.Rules() {
+		if got := f.GuardStates()[r.ID]; got != r.Outcome {
+			t.Fatalf("%s starts at %s, want %s", r.ID, got, r.Outcome)
 		}
-	}
-	upgradeLog := len(s.RuleLog)
-	f.mu.Lock()
-	f.applyRuleDefaultsLocked()
-	f.mu.Unlock()
-	if len(f.GuardSettings().RuleLog) != upgradeLog {
-		t.Fatal("the defaults were logged twice")
 	}
 
 	// Who may flip.
@@ -96,5 +89,33 @@ func TestRuleSwitches(t *testing.T) {
 	}
 	if g.GuardStates()[guard.RuleElevation] != guard.Block || len(g.GuardSettings().RuleLog) != len(saved.RuleLog) {
 		t.Fatalf("after restart: %v, %d log entries (was %d)", g.GuardStates()[guard.RuleElevation], len(g.GuardSettings().RuleLog), len(saved.RuleLog))
+	}
+}
+
+// An install from a build with looser defaults: its saved settings (defaults_version 1, the
+// "tmx" log of those defaults) load, the rules it never switched follow today's defaults, and
+// the owner's own switches stay as he set them.
+func TestOlderInstallKeepsOwnerSwitchesOnly(t *testing.T) {
+	e := newEnv(t)
+	e.guard = &guard.Settings{Enabled: false, DefaultsVersion: 1,
+		RuleStates: map[string]guard.Outcome{guard.RuleDesktop: guard.Allow},
+		RuleLog: []guard.RuleChange{
+			{Rule: guard.RuleKillByName, Old: guard.Block, New: guard.Allow, At: "2026-11-03T22:14:00Z", By: "tmx"},
+			{Rule: guard.RuleDesktop, Old: guard.Allow, New: guard.Allow, At: "2026-11-04T09:00:00Z", By: "owner"},
+		}}
+	f := e.started()
+	st := f.GuardStates()
+	for id, want := range map[string]guard.Outcome{
+		guard.RuleKillByName: guard.Block, guard.RuleShutdown: guard.Block, guard.RuleTmxState: guard.Block,
+		guard.RuleTmxCLI: guard.Block, guard.RuleBrowser: guard.Block, guard.RulePipeShell: guard.Hold,
+		guard.RuleWriteOutside: guard.Hold, guard.RuleClaudeConfig: guard.Hold, guard.RuleBrowserMention: guard.Hold,
+		guard.RuleDesktop: guard.Allow, // the owner's own switch
+	} {
+		if st[id] != want {
+			t.Errorf("%s: %s, want %s", id, st[id], want)
+		}
+	}
+	if s := f.GuardSettings(); len(s.RuleLog) != 2 || s.DefaultsVersion != 1 {
+		t.Fatalf("the saved settings changed at start: v%d, log %+v", s.DefaultsVersion, s.RuleLog)
 	}
 }

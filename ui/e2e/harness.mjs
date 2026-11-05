@@ -1,4 +1,4 @@
-// Browser e2e harness (recorder-fix-o for tmx-lead, 3 Nov 2026): the owner's screens in a real browser, the way he
+// Browser e2e harness: the owner's screens in a real browser, the way the owner
 // uses them. Linux CI only (.github/workflows/e2e.yml): a browser never runs on the owner's PCs.
 //
 // Each test gets a THROWAWAY daemon: the gatesim build (owner approvals without an OS prompt, only for a fresh
@@ -16,6 +16,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { chromium } from "playwright";
+import { startResources, serverResource, stopProcess } from "./resources.mjs";
 
 // Linux CI only, enforced (go-reviewer-o / tmx-lead, 3 Nov): this harness starts real browsers and a gatesim
 // daemon, and the job installs a throwaway CA; none of that may ever run on the owner's PCs.
@@ -33,7 +34,7 @@ const freePort = () => new Promise((resolve, reject) => {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /** A fake local model: answers /api/generate like Ollama with a summary in the JSON the daemon asks for. */
-async function fakeOllama() {
+async function fakeOllama(own) {
   const asks = [];
   const srv = http.createServer((req, res) => {
     let body = "";
@@ -47,8 +48,10 @@ async function fakeOllama() {
       res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ response: JSON.stringify(summary) }));
     });
   });
-  await new Promise(r => srv.listen(0, "127.0.0.1", r));
-  return { url: `http://127.0.0.1:${srv.address().port}`, asks, close: () => new Promise(r => srv.close(r)) };
+  const resource = serverResource(srv);
+  own(resource.close);
+  await resource.listen();
+  return { url: `http://127.0.0.1:${srv.address().port}`, asks, close: resource.close };
 }
 
 // The phone's HTTPS: a certificate for tmx.localhost from a throwaway CA the CI job made and trusted in
@@ -61,7 +64,7 @@ function tlsOptions() {
 }
 
 /** The trusted HTTPS proxy a phone goes through (see the header). */
-async function phoneProxy(daemonPort) {
+async function phoneProxy(daemonPort, own) {
   const port = await freePort();
   const srv = https.createServer(tlsOptions(), (req, res) => {
     const up = http.request({ host: "127.0.0.1", port: daemonPort, method: req.method, path: req.url,
@@ -69,65 +72,71 @@ async function phoneProxy(daemonPort) {
     up.on("error", () => { res.writeHead(502).end(); });
     req.pipe(up);
   });
+  const resource = serverResource(srv);
+  own(resource.close);
   srv.on("upgrade", (req, sock, head) => {     // the dashboard's websocket
-    const up = net.connect(daemonPort, "127.0.0.1", () => {
+    const up = resource.track(net.connect(daemonPort, "127.0.0.1", () => {
       const lines = [`${req.method} ${req.url} HTTP/1.1`];
       for (let i = 0; i < req.rawHeaders.length; i += 2) lines.push(`${req.rawHeaders[i]}: ${req.rawHeaders[i + 1]}`);
       lines.push("X-Forwarded-Proto: https", "", "");
       up.write(lines.join("\r\n")); up.write(head); sock.pipe(up).pipe(sock);
-    });
+    }));
+    sock.on("close", () => up.destroy());
     up.on("error", () => sock.destroy());
   });
-  await new Promise(r => srv.listen(port, "127.0.0.1", r));
-  return { port, origin: `https://tmx.localhost:${port}`, host: `tmx.localhost:${port}`, close: () => new Promise(r => srv.close(r)) };
+  await resource.listen(port);
+  return { port, origin: `https://tmx.localhost:${port}`, host: `tmx.localhost:${port}`, close: resource.close };
 }
 
 /** Starts a throwaway daemon; call stop() at the end. */
 export async function startDaemon({ phone = false, config = {} } = {}) {
-  const home = mkdtempSync(path.join(os.tmpdir(), "tmxg-e2e-"));
-  const port = await freePort();
-  const model = await fakeOllama();
-  const proxy = phone ? await phoneProxy(port) : null;
-  mkdirSync(home, { recursive: true });
-  writeFileSync(path.join(home, "config.json"), JSON.stringify({
-    port,
-    voice: { auto_transcribe: false },
-    summaries: { local_url: model.url },
-    ...(proxy ? { api: { trusted_hosts: [proxy.host] } } : {}),
-    ...config,
-  }, null, 1));
-  const log = [];
-  const proc = spawn(BIN, ["daemon"], {
-    env: { ...process.env, TMXG_HOME: home, TMXG_GATESIM: home, TMXG_PORT: String(port) },
-    stdio: ["ignore", "pipe", "pipe"],
+  return startResources(async own => {
+    const home = mkdtempSync(path.join(os.tmpdir(), "tmxg-e2e-"));
+    own(() => rmSync(home, { recursive: true, force: true }));
+    const port = await freePort();
+    const model = await fakeOllama(own);
+    const proxy = phone ? await phoneProxy(port, own) : null;
+    mkdirSync(home, { recursive: true });
+    writeFileSync(path.join(home, "config.json"), JSON.stringify({
+      port,
+      voice: { auto_transcribe: false },
+      summaries: { local_url: model.url },
+      ...(proxy ? { api: { trusted_hosts: [proxy.host] } } : {}),
+      ...config,
+    }, null, 1));
+    const log = [];
+    const proc = spawn(BIN, ["daemon"], {
+      env: { ...process.env, TMXG_HOME: home, TMXG_GATESIM: home, TMXG_PORT: String(port) },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let spawnError;
+    const exited = new Promise(resolve => {
+      proc.once("exit", resolve);
+      proc.once("error", error => { spawnError = error; resolve(); });
+    });
+    own(() => spawnError ? undefined : stopProcess(proc, exited));
+    for (const s of [proc.stdout, proc.stderr]) s.on("data", d => { log.push(String(d)); if (log.length > 400) log.shift(); });
+    const url = `http://127.0.0.1:${port}`;
+    const deadline = Date.now() + 30_000;
+    for (;;) {
+      try { if ((await fetch(url + "/api/health", { signal: AbortSignal.timeout(1000) })).ok) break; } catch { /* not up yet */ }
+      if (spawnError) throw spawnError;
+      if (proc.exitCode !== null || proc.signalCode !== null || Date.now() > deadline) throw new Error("the daemon did not start:\n" + log.join(""));
+      await sleep(100);
+    }
+    const token = readFileSync(path.join(home, "secrets", "owner-token"), "utf8").trim();
+    const api = async (method, p, body) => {
+      const r = await fetch(url + p, { method, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body) });
+      const text = await r.text();
+      if (!r.ok) throw new Error(`${method} ${p}: ${r.status} ${text}`);
+      return text ? JSON.parse(text) : null;
+    };
+    return {
+      home, port, url, token, model, proxy, api, log,
+      ownerURL: (route = "/") => `${url}/#token=${encodeURIComponent(token)}`,
+    };
   });
-  for (const s of [proc.stdout, proc.stderr]) s.on("data", d => { log.push(String(d)); if (log.length > 400) log.shift(); });
-  const url = `http://127.0.0.1:${port}`;
-  for (let i = 0; ; i++) {
-    try { if ((await fetch(url + "/api/health")).ok) break; } catch { /* not up yet */ }
-    if (proc.exitCode !== null || i > 300) throw new Error("the daemon did not start:\n" + log.join(""));
-    await sleep(100);
-  }
-  const token = readFileSync(path.join(home, "secrets", "owner-token"), "utf8").trim();
-  const api = async (method, p, body) => {
-    const r = await fetch(url + p, { method, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body) });
-    const text = await r.text();
-    if (!r.ok) throw new Error(`${method} ${p}: ${r.status} ${text}`);
-    return text ? JSON.parse(text) : null;
-  };
-  return {
-    home, port, url, token, model, proxy, api, log,
-    ownerURL: (route = "/") => `${url}/#token=${encodeURIComponent(token)}`,
-    async stop() {
-      proc.kill("SIGTERM");
-      await Promise.race([new Promise(r => proc.once("exit", r)), sleep(5000)]);
-      if (proc.exitCode === null) proc.kill("SIGKILL");
-      await model.close();
-      await proxy?.close();
-      rmSync(home, { recursive: true, force: true });
-    },
-  };
 }
 
 /** Bundled Chromium with fake camera/mic; never the OS authenticator (7 Oct lockout). */

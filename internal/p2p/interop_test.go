@@ -8,7 +8,7 @@ package p2p
 // TMX_P2P_PINNED_CHECKOUT) and runs both over a local relay.
 //
 // Gated behind TMX_P2P_INTEROP=1: it compiles a second binary and (for
-// TestInteropLateJoinAdmissionWindow) waits a real 2 minutes, neither of which belongs in the
+// TestInteropLateJoinAdmissionWindow) waits a real 5 minutes, twice, neither of which belongs in the
 // default `go test ./...` run. The dedicated CI job (.github/workflows/p2p-interop.yml) sets
 // both env vars and runs only on PRs touching internal/p2p, pairing or the Core messages.
 
@@ -287,16 +287,13 @@ func runInteropPair(t *testing.T, inviterKind, joinerKind string) {
 	}
 }
 
-// TestInteropLateJoinAdmissionWindow documents the one behavioral divergence that affects
-// who gets paired at all (the Common Core diff, 3 Nov, corrected after a first wrong read):
-// OUR gater (internal/p2p/gater.go's inviteOpen) admits an unrecorded joiner only within 2
-// minutes of the invite's OWN creation time; the pinned build's inviteOpen has no such cap -
-// an invite stays open for its full stated lifetime (24h DM) exactly as a joiner would expect
-// from a fresh install. So the divergence is one-directional: an invite from one of OUR
-// builds dies early for a late joiner; an invite from a pinned build does not. The joiner's
-// wait is measured from the inviter's own CREATED_AT (an absolute instant, via -join-at), not
-// from when the joiner process happens to start - a security-property boundary test must
-// measure against the invite's own clock. This takes a real several minutes to run.
+// TestInteropLateJoinAdmissionWindow checks that a joiner who opens the link minutes after
+// it was made still pairs, in both directions: both builds' gaters (inviteOpen) admit
+// strangers for the invite's whole stated lifetime (24h DM). A 2-minute admission cap (#79)
+// once made our invites die early for a late joiner while the pinned build's did not; it was
+// removed, so this now guards against that divergence coming back. The joiner's wait is
+// measured from the inviter's own CREATED_AT (an absolute instant, via -join-at), not from
+// when the joiner process happens to start. This takes a real several minutes to run.
 func TestInteropLateJoinAdmissionWindow(t *testing.T) {
 	skipUnlessInterop(t)
 	ours := buildOurHarness(t)
@@ -323,48 +320,29 @@ func TestInteropLateJoinAdmissionWindow(t *testing.T) {
 		return inviter, link, created
 	}
 
-	t.Run("our invite dies for a joiner 5 minutes late", func(t *testing.T) {
+	// lateJoin has bin's inviter make an invite and joinBin's joiner use it 5 minutes later.
+	lateJoin := func(t *testing.T, bin, joinBin, who string) {
 		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
 		defer cancel()
-		_, link, created := createInvite(t, ctx, ours)
-		joiner := startHarness(t, pinned, "joiner", relayAddr, link, 6*time.Minute, created.Add(5*time.Minute))
-		if _, err := joiner.waitForLine(ctx, "DONE"); err == nil {
-			t.Fatal("a joiner 5 minutes late paired with one of our invites past its 2-minute window")
-		}
-		// The inviter never reaches DONE here (pairing never completes): t.Cleanup kills it.
-	})
-
-	t.Run("our invite still admits a joiner 30 seconds late", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		inviter, link, created := createInvite(t, ctx, ours)
-		joiner := startHarness(t, pinned, "joiner", relayAddr, link, time.Minute, created.Add(30*time.Second))
+		inviter, link, created := createInvite(t, ctx, bin)
+		joiner := startHarness(t, joinBin, "joiner", relayAddr, link, 6*time.Minute, created.Add(5*time.Minute))
 		joinErr := func() error { _, err := joiner.waitForLine(ctx, "DONE"); return err }()
 		inviteErr := func() error { _, err := inviter.waitForLine(ctx, "DONE"); return err }()
 		joiner.close()
 		inviter.close()
 		if joinErr != nil {
-			t.Fatalf("a joiner 30s late failed to pair within our 2-minute window (expected to succeed): %v", joinErr)
+			t.Fatalf("a joiner 5 minutes late failed to pair with %s invite: %v", who, joinErr)
 		}
 		if inviteErr != nil {
-			t.Fatalf("our inviter: %v", inviteErr)
+			t.Fatalf("%s inviter: %v", who, inviteErr)
 		}
+	}
+
+	t.Run("our invite still admits a joiner 5 minutes late", func(t *testing.T) {
+		lateJoin(t, ours, pinned, "our")
 	})
 
 	t.Run("a pinned invite still admits a joiner 5 minutes late", func(t *testing.T) {
-		ctx, cancel := context.WithTimeout(context.Background(), 7*time.Minute)
-		defer cancel()
-		inviter, link, created := createInvite(t, ctx, pinned)
-		joiner := startHarness(t, ours, "joiner", relayAddr, link, 6*time.Minute, created.Add(5*time.Minute))
-		joinErr := func() error { _, err := joiner.waitForLine(ctx, "DONE"); return err }()
-		inviteErr := func() error { _, err := inviter.waitForLine(ctx, "DONE"); return err }()
-		joiner.close()
-		inviter.close()
-		if joinErr != nil {
-			t.Fatalf("a joiner 5 minutes late failed to pair with a pinned invite (expected to succeed - his gater has no 2-minute cap): %v", joinErr)
-		}
-		if inviteErr != nil {
-			t.Fatalf("pinned inviter: %v", inviteErr)
-		}
+		lateJoin(t, pinned, ours, "a pinned")
 	})
 }

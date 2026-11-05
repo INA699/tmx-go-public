@@ -51,7 +51,7 @@ func TestAgentTypedTextIsDeliveredLikeMail(t *testing.T) {
 	if err := f.TypeText(lc, "w1", "  run the tests\r\nthen report  ", true); err != nil {
 		t.Fatalf("lead typed: %v", err)
 	}
-	if got := p.Sent(); len(got) != 1 || got[0] != "[message from alpha-lead (lead)] run the tests\nthen report" {
+	if got := p.Sent(); len(got) != 1 || got[0] != "[message from alpha-lead (lead)]\n│ run the tests\n│ then report" {
 		t.Fatalf("sent %q", got)
 	}
 	if got := p.Written(); len(got) != 0 {
@@ -73,7 +73,7 @@ func TestAgentTypedTextIsDeliveredLikeMail(t *testing.T) {
 	if err := f.TypeText(lc, "w1", "a\x1b[201~\x1b[Zb\x03\x7f\u009bc", true); err != nil {
 		t.Fatalf("lead typed: %v", err)
 	}
-	if got := p.Sent(); got[1] != "[message from alpha-lead (lead)] a[201~[Zbc" {
+	if got := p.Sent(); got[1] != "[message from alpha-lead (lead)]\n│ a[201~[Zbc" {
 		t.Fatalf("control bytes survived: %q", got[1])
 	}
 
@@ -238,47 +238,39 @@ func TestAgentTypeIntoChatAgentRefused(t *testing.T) {
 	}
 }
 
-// A full peer (another fleet machine, authenticated by its pair token) is owner-equivalent for
-// agent operations only (launch/screen/type/keys/restart; tmx-lead, 3 Nov interop P0): it types
-// and presses any key, like the owner, never mail-relay-restricted like a head or lead agent -
-// but NEVER with the owner's unguarded strength (go-reviewer-o, #161 review, machine
-// protection): Write(owner=true) is the literal owner's bypass of the pending-approval/menu
-// gate and a shell's owner-only refusal, reserved for a human at the real keyboard. A peer's
-// write still goes through that race-free gate, and a peer never reaches a shell at all.
-// It is NEVER owner for owner-only routes (RemoveAgent here stands in for the ~50 c.Owner checks
-// and every API s.ownerOnly route, all gated on the literal Owner bool, untouched by this change).
-func TestPeerIsOwnerEquivalentForAgentOpsOnlyNeverOwnerOnly(t *testing.T) {
+// A full peer (another fleet machine, authenticated by its pair token) is never the owner. It
+// operates agents the way a head would: launch, screen, restart; its typed text goes as
+// labelled mail (never raw keystrokes, so no slash command or menu answer), it presses only esc
+// and ctrl+c, and it never reaches a shell. Owner-only actions refuse it.
+func TestPeerOperatesAgentsLikeAHeadNeverAsTheOwner(t *testing.T) {
 	_, f, _, w, p := typeTextLead(t)
-	peer := PeerCaller("hosta")
+	peer := PeerCallerAs("hosta", "builder")
 
-	if peer.Owner {
-		t.Fatal("PeerCaller must never set Owner")
+	if peer.Owner || peer.ID() != "fleet:builder@hosta" || PeerCaller("hosta").ID() != "fleet:daemon@hosta" {
+		t.Fatalf("peer identity: %+v %q", peer, peer.ID())
+	}
+	if c := PeerCallerAs("hosta", "operator"); c.ID() != "fleet:daemon@hosta" {
+		t.Fatalf("a reserved on-behalf name is the machine itself: %q", c.ID())
 	}
 
-	if err := f.TypeText(peer, "w1", "/permissions", true); err != nil {
+	if err := f.TypeText(peer, "w1", "/permissions", true); KindOf(err) != KindForbidden {
+		t.Fatalf("peer typed a slash command: %v", err)
+	}
+	if err := f.TypeText(peer, "w1", "run the tests", true); err != nil {
 		t.Fatalf("peer typed: %v", err)
 	}
-	if got := string(p.Written()); got != "/permissions\r" {
-		t.Fatalf("peer should type raw: got %q", got)
+	if got := p.Sent(); len(got) != 1 || got[0] != "[message from builder@hosta (other machine)]\n│ run the tests" {
+		t.Fatalf("peer text should go as labelled mail: %q", got)
 	}
-
-	if err := f.SendKeys(peer, "w1", "down enter shift+tab"); err != nil {
-		t.Fatalf("peer pressed keys: %v", err)
+	if got := p.Written(); len(got) != 0 {
+		t.Fatalf("peer wrote raw keystrokes: %q", got)
 	}
-	if got := string(p.Written()); got != "/permissions\r\x1b[B\r\x1b[Z" {
-		t.Fatalf("peer should press any key: got %q", got)
+	if err := f.SendKeys(peer, "w1", "down enter shift+tab"); KindOf(err) != KindForbidden {
+		t.Fatalf("peer pressed owner-only keys: %v", err)
 	}
-
-	// A peer's write is refused, race-free, the same as the owner's own would be - it never
-	// bypasses a pending menu or approval (go-reviewer-o's must-fix).
-	p.SetPending(true)
-	if err := f.TypeText(peer, "w1", "x", true); KindOf(err) != KindForbidden {
-		t.Fatalf("peer typed through a pending approval: %v", err)
+	if err := f.SendKeys(peer, "w1", "esc"); err != nil {
+		t.Fatalf("peer pressed esc: %v", err)
 	}
-	if err := f.SendKeys(peer, "w1", "enter"); KindOf(err) != KindForbidden {
-		t.Fatalf("peer pressed a key through a pending approval: %v", err)
-	}
-	p.SetPending(false)
 
 	p.SetReplay([]byte("hello from the terminal"))
 	if _, err := f.Screen(peer, "w1", 0); err != nil {
@@ -289,27 +281,27 @@ func TestPeerIsOwnerEquivalentForAgentOpsOnlyNeverOwnerOnly(t *testing.T) {
 		t.Fatalf("peer restart: %v", err)
 	}
 
-	// A peer never reaches a shell at all: type, keys, screen.
+	// A peer never reaches a shell at all: type, keys, screen, stop.
 	if _, err := f.LaunchAgent(OwnerCaller, LaunchRequest{Name: "owner-shell", Harness: model.HarnessShell}); err != nil {
 		t.Fatalf("launch shell: %v", err)
 	}
 	if err := f.TypeText(peer, "owner-shell", "ls", true); KindOf(err) != KindForbidden {
 		t.Fatalf("peer typed into a shell: %v", err)
 	}
-	if err := f.SendKeys(peer, "owner-shell", "enter"); KindOf(err) != KindForbidden {
+	if err := f.SendKeys(peer, "owner-shell", "esc"); KindOf(err) != KindForbidden {
 		t.Fatalf("peer pressed a key in a shell: %v", err)
 	}
 	if _, err := f.Screen(peer, "owner-shell", 0); KindOf(err) != KindForbidden {
 		t.Fatalf("peer screened a shell: %v", err)
 	}
-
-	// Launch: a peer launches like the owner (no CanLaunch/tier restriction - callerRecLocked
-	// returns nil for a peer, same as the owner).
-	if _, err := f.LaunchAgent(peer, LaunchRequest{Name: "peer-launched"}); err != nil {
-		t.Fatalf("peer launch: %v", err)
+	if _, err := f.StopAgent(peer, "owner-shell"); KindOf(err) != KindForbidden {
+		t.Fatalf("peer stopped the owner's shell: %v", err)
+	}
+	if _, err := f.LaunchAgent(peer, LaunchRequest{Name: "peer-shell", Harness: model.HarnessShell}); KindOf(err) != KindForbidden {
+		t.Fatalf("peer launched a shell: %v", err)
 	}
 
-	// The hard boundary (tmx-lead, 3 Nov): never owner for an owner-only route.
+	// The hard boundary: never owner for an owner-only action.
 	if err := f.RemoveAgent(peer, w.ID); KindOf(err) != KindForbidden {
 		t.Fatalf("peer removed an agent (owner-only route): err=%v", err)
 	}

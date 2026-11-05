@@ -21,7 +21,7 @@ import { splitAttachments } from "@/lib/attachments";
 import { href, navigate, paths } from "@/lib/router";
 import { pendingApprovals, projectTree, useStore } from "@/lib/store";
 import { agentLabel } from "@/lib/profiles";
-import { summarizeTool } from "@/lib/tools";
+import { summarizeTool, tmxTool } from "@/lib/tools";
 import type { Agent, AgentState, Project, TimelineEntry } from "@/lib/types";
 import { ui, useUI } from "@/lib/ui";
 import { cn } from "@/lib/utils";
@@ -194,7 +194,9 @@ function ProjectCard({ p }: { p: Project }) {
 type Activity = { e: TimelineEntry; agent: Agent };
 
 /** Bookkeeping calls that would only add noise to the feed. */
-const QUIET_TOOLS = new Set(["mcp__tmxg__whoami", "mcp__tmxg__fleet", "mcp__tmxg__inbox", "mcp__tmxg__agent_status", "TodoWrite", "Read", "Glob", "Grep"]);
+const QUIET_TOOLS = new Set(["TodoWrite", "Read", "Glob", "Grep"]);
+const QUIET_TMX_TOOLS = new Set(["whoami", "fleet", "inbox", "agent_status"]);
+const quietTool = (tool: string | undefined) => QUIET_TOOLS.has(tool ?? "") || QUIET_TMX_TOOLS.has(tmxTool(tool) ?? "");
 
 function activityText(e: TimelineEntry, a: Agent, agents: Record<string, Agent>): { icon: React.ComponentType<{ className?: string }> | null; text: string; mono?: boolean } {
   switch (e.kind) {
@@ -235,7 +237,7 @@ function ActivityFeed() {
       for (const e of tl.entries.slice(-14)) {
         if (e.kind === "assistant" || e.kind === "tool_use" || e.kind === "message_in" || e.kind === "user" || e.kind === "error") {
           if (e.kind === "assistant" && !e.text.trim()) continue;
-          if (e.kind === "tool_use" && QUIET_TOOLS.has(e.tool ?? "")) continue;
+          if (e.kind === "tool_use" && quietTool(e.tool)) continue;
           out.push({ e, agent });
         }
       }

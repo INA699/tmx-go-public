@@ -8,7 +8,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// The owner, 3 Nov: "I need to be able to allow always". A standing allow covers one rule + the
+// The owner can allow always: a standing allow covers one rule + the
 // exact command + tool, for the agent's profile or any agent; only the owner sets or revokes it.
 func TestGuardAllowAlways(t *testing.T) {
 	e := newEnv(t)

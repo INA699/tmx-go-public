@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, CircleDot, FolderClosed, Inbox, LayoutGrid, ListTree, Moon, Plus, Search, Settings, Sun } from "lucide-react";
 import { SquareTerminal } from "lucide-react"; // an agent in its own screen (harness-screen.tsx)
-import { Gauge, ListChecks } from "lucide-react";
+import { Gauge } from "lucide-react";
 import { UsageDot } from "./accounts/usage-bits";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -302,7 +302,7 @@ export function SidebarContent({ onNavigate, desktopMac }: { onNavigate?: () => 
     <div className="flex h-full min-h-0 flex-col">
       <div className={cn("drag-region flex h-[3.25rem] shrink-0 items-center gap-2 pr-2", desktopMac ? "pl-[5.875rem]" : "pl-4")}>
         <BrandMark />
-        <span className="min-w-0 truncate text-[0.8125rem] font-semibold tracking-tight">{machine || "tmx"}</span>
+        <span className="min-w-0 truncate text-[0.8125rem] font-semibold tracking-tight">{machine || "Tiamatrix"}</span>
         <ConnectionDot />
         <ReconnectingPill />
         <Tooltip>
@@ -347,7 +347,6 @@ export function SidebarContent({ onNavigate, desktopMac }: { onNavigate?: () => 
             right={recording ? <span className="size-2 animate-pulse rounded-full bg-state-error" aria-label="Recording" /> : undefined}
           />
           <NavItem to={paths.usage()} icon={Gauge} label="Usage" active={path === paths.usage()} onNavigate={onNavigate} right={<UsageDot />} />
-          <NavItem to={paths.features()} icon={ListChecks} label="Features" active={path === paths.features()} onNavigate={onNavigate} />
         </nav>
 
         <SidebarChats path={path} onNavigate={onNavigate} open={!collapsed[CHATS_SECTION]} onToggle={() => toggle(CHATS_SECTION)} />

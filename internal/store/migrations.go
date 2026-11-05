@@ -509,9 +509,8 @@ ALTER TABLE approvals ADD COLUMN card TEXT NOT NULL DEFAULT 'null';`,
 	`ALTER TABLE approvals ADD COLUMN deferred INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE approvals ADD COLUMN answer_id TEXT NOT NULL DEFAULT '';
 CREATE TABLE card_answers (approval_id TEXT NOT NULL, request_id TEXT NOT NULL, request TEXT NOT NULL, result TEXT NOT NULL, message_id TEXT NOT NULL, PRIMARY KEY (approval_id, request_id));`,
-	// Checklist progress, optimistic versions and a conservative ETA (DESIGN.md "Progress"):
-	// the latest checklist lives on the project row itself; progress_samples is bounded
-	// history (100 per project, pruned after 30 days) used only to derive an ETA.
+	// Checklist progress (a feature since removed; the columns and progress_samples stay so
+	// schema versions do not change, and nothing reads or writes them).
 	`
 ALTER TABLE projects ADD COLUMN progress INTEGER;
 ALTER TABLE projects ADD COLUMN progress_basis TEXT NOT NULL DEFAULT '';
@@ -583,8 +582,8 @@ CREATE INDEX thread_links_ref ON thread_links(axis, ref);
 	`ALTER TABLE agents ADD COLUMN shelved_at INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE agents ADD COLUMN done_at INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE agents ADD COLUMN protected INTEGER NOT NULL DEFAULT 0;`,
-	// recordings' sensitivity (G5, the owner 3 Nov): "clinic" = patient data of the clinics, summarized on our own
-	// machines only; "" = anything may write the report.
+	// recordings' sensitivity: "clinic" = sensitive, summarized by local models only; "" = anything may write
+	// the report.
 	`ALTER TABLE recordings ADD COLUMN sensitivity TEXT NOT NULL DEFAULT '';`,
 	`CREATE TABLE profile_default_upgrades (name TEXT PRIMARY KEY);`,
 	`CREATE TABLE project_imports (project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE, source TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(project_id,source,id));`,

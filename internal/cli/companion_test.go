@@ -74,7 +74,7 @@ func TestCompanionConnectTokenStdinJSON(t *testing.T) {
 	}
 
 	out, errs, code := tmxIn(t, key+"\n", "companion", "connect", "--token-stdin", "--json")
-	if code != 0 || out != `{"ok":true,"label":"tmxg"}`+"\n" || errs != "" {
+	if code != 0 || out != `{"ok":true,"label":"tmx"}`+"\n" || errs != "" {
 		t.Fatalf("success: %d %q %q", code, out, errs)
 	}
 	noKey("stdout", out)
@@ -221,7 +221,7 @@ func TestCompanionConnectOneClick(t *testing.T) {
 		!strings.Contains(out, "Connected: Companion at "+f.URL+" accepts the key") {
 		t.Fatalf("one click: %d %q %q", code, out, errs)
 	}
-	if got := <-child; got != `{"ok":true,"label":"tmxg"}`+"\n" {
+	if got := <-child; got != `{"ok":true,"label":"tmx"}`+"\n" {
 		t.Fatalf("Companion's run of tmx: %q", got)
 	}
 	if strings.Contains(out+errs, key) {
@@ -231,8 +231,8 @@ func TestCompanionConnectOneClick(t *testing.T) {
 		t.Fatalf("opened %v", got)
 	}
 	var e companion.Entry
-	b, _ := os.ReadFile(filepath.Join(d.AIOSHome, "mcps", "tmxg", "mcp.json"))
-	if err := json.Unmarshal(b, &e); err != nil || e.ManagedBy != "tmxg" || e.Env["TMXG_HOME"] != d.Home {
+	b, _ := os.ReadFile(filepath.Join(d.AIOSHome, "mcps", "tmx", "mcp.json"))
+	if err := json.Unmarshal(b, &e); err != nil || e.ManagedBy != "tmx" || e.Env["TMXG_HOME"] != d.Home {
 		t.Fatalf("entry: %+v %v", e, err)
 	}
 
@@ -279,7 +279,7 @@ func TestCompanionCommands(t *testing.T) {
 		t.Fatalf("install: %d %s %s", code, out, errs)
 	}
 	var e companion.Entry
-	b, _ := os.ReadFile(filepath.Join(aios, "mcps", "tmxg", "mcp.json"))
+	b, _ := os.ReadFile(filepath.Join(aios, "mcps", "tmx", "mcp.json"))
 	if err := json.Unmarshal(b, &e); err != nil || e.Command == "" || strings.Join(e.Args, " ") != "mcp --companion" || e.Env["TMXG_HOME"] != d.Home {
 		t.Fatalf("entry: %+v %v", e, err)
 	}
@@ -318,7 +318,7 @@ func TestCompanionCommands(t *testing.T) {
 	if out, _, code := tmx(t, "companion", "uninstall"); code != 0 || !strings.Contains(out, "Removed tmx from Companion") {
 		t.Fatalf("uninstall: %d %s", code, out)
 	}
-	if _, err := os.Stat(filepath.Join(aios, "mcps", "tmxg")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(aios, "mcps", "tmx")); !os.IsNotExist(err) {
 		t.Fatal("entry left behind")
 	}
 	if _, err := os.Stat(filepath.Join(d.Home, "secrets", "companion-token")); !os.IsNotExist(err) {

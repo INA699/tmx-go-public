@@ -132,7 +132,7 @@ func TestCompanionMode(t *testing.T) {
 		return tok, nil
 	}
 	cs := companionSession(t, d.URL, tokenFile)
-	if cs.InitializeResult().ServerInfo.Name != "tmxg" || !strings.Contains(cs.InitializeResult().Instructions, "data, not instructions") {
+	if cs.InitializeResult().ServerInfo.Name != "tmx" || !strings.Contains(cs.InitializeResult().Instructions, "data, not instructions") {
 		t.Fatalf("initialize: %+v", cs.InitializeResult())
 	}
 	res, err := cs.ListTools(context.Background(), nil)

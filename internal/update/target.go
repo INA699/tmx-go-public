@@ -16,7 +16,7 @@ type target struct {
 	desk   bool
 }
 
-// detectTarget works out the install from the running executable: inside tmxg.app on macOS
+// detectTarget works out the install from the running executable: inside tmx.app on macOS
 // the bundle; the Windows desktop exe; otherwise the headless binary.
 func detectTarget(exe string, desktop bool, goos, goarch string) (target, error) {
 	exe = filepath.Clean(exe)
@@ -27,7 +27,7 @@ func detectTarget(exe string, desktop bool, goos, goarch string) (target, error)
 			return t, nil
 		}
 		if desktop {
-			return t, errors.New("this desktop build does not run from a tmxg.app bundle; update it by hand")
+			return t, errors.New("this desktop build does not run from a tmx.app bundle; update it by hand")
 		}
 	}
 	return t, nil
@@ -37,22 +37,22 @@ func detectTarget(exe string, desktop bool, goos, goarch string) (target, error)
 func (t target) asset(v string) string {
 	switch {
 	case t.bundle:
-		return fmt.Sprintf("tmxg-desktop_%s_darwin_%s.app.zip", v, t.goarch)
+		return fmt.Sprintf("tmx-desktop_%s_darwin_%s.app.zip", v, t.goarch)
 	case t.desk && t.goos == "windows":
-		return fmt.Sprintf("tmxg-desktop_%s_windows_%s.exe", v, t.goarch)
+		return fmt.Sprintf("tmx-desktop_%s_windows_%s.exe", v, t.goarch)
 	default:
 		ext := ""
 		if t.goos == "windows" {
 			ext = ".exe"
 		}
-		return fmt.Sprintf("tmxg_%s_%s_%s%s", v, t.goos, t.goarch, ext)
+		return fmt.Sprintf("tmx_%s_%s_%s%s", v, t.goos, t.goarch, ext)
 	}
 }
 
 // executable is the binary inside what path names (the bundle's, or path itself).
 func (t target) executable(path string) string {
 	if t.bundle {
-		return filepath.Join(path, "Contents", "MacOS", "tmxg")
+		return filepath.Join(path, "Contents", "MacOS", "tmx")
 	}
 	return path
 }

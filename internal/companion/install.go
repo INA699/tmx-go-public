@@ -23,13 +23,15 @@ import (
 const EnvAIOSHome = "TMXG_AIOS_HOME"
 
 // Name is the folder tmx installs under, in mcps/ and skills/.
-const Name = "tmxg"
+const Name = "tmx"
 
 // Marker identifies tmx's own entries: mcp.json "managed_by", and a line in SKILL.md. An
 // entry without it is someone else's and is never overwritten or removed.
 const (
-	Marker      = "tmxg"
-	skillMarker = "<!-- managed by tmxg (tmxg companion install); tmxg companion uninstall removes it -->"
+	Marker      = "tmx"
+	skillMarker = "<!-- managed by tmx (tmx companion install); tmx companion uninstall removes it -->"
+	// legacyMarker is the marker of builds named tmxg: still ours.
+	legacyMarker = "tmxg"
 )
 
 // AIOSHome requires an explicit isolated Companion root in fleet builds.
@@ -81,11 +83,14 @@ func (o InstallOptions) entry(cwd string) Entry {
 // isOurs: the marker, or (should Companion drop unknown keys when it rewrites an entry) a tmx
 // binary started as `mcp --companion`.
 func isOurs(e Entry) bool {
-	if e.ManagedBy == Marker {
+	if e.ManagedBy == Marker || e.ManagedBy == legacyMarker {
 		return true
 	}
-	base := strings.ToLower(filepath.Base(e.Command))
-	return (base == "tmxg" || base == "tmxg.exe") && strings.Join(e.Args, " ") == "mcp --companion"
+	switch strings.ToLower(filepath.Base(e.Command)) {
+	case "tmx", "tmx.exe", "tmxg", "tmxg.exe":
+		return strings.Join(e.Args, " ") == "mcp --companion"
+	}
+	return false
 }
 
 // InstallStatus is what is in Companion's folders now.
@@ -246,7 +251,7 @@ tmx runs a tree of coding agents on this computer: one **head** agent that talks
 **lead** per project, and **workers** under each lead. The owner decides everything sensitive in tmx's
 own app ("Needs you"); you only look and pass messages on.
 
-## Tools (MCP server "tmxg")
+## Tools (MCP server "tmx")
 
 - ` + "`tmx_fleet`" + `: projects and agents with their state (working, idle, waiting, queued, paused, stopped, error).
 - ` + "`tmx_needs_you`" + `: what waits for the owner's decision in tmx (permissions, questions). Read-only: the

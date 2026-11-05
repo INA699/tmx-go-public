@@ -18,7 +18,7 @@ func TestBrowserHostPolicyOwnerGate(t *testing.T) {
 		Allow  bool                     `json:"allow_browser_automation"`
 		States map[string]guard.Outcome `json:"states"`
 	}
-	if s, _ := call(t, agent, "GET", "/api/guard/policy", nil, &policy); s != 0 || policy.Allow || policy.States[guard.RuleBrowser] != guard.Allow {
+	if s, _ := call(t, agent, "GET", "/api/guard/policy", nil, &policy); s != 0 || policy.Allow || policy.States[guard.RuleBrowser] != guard.Block {
 		t.Fatalf("default policy: %d %+v", s, policy)
 	}
 	next := guard.DefaultSettings()

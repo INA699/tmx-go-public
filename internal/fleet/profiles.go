@@ -60,6 +60,9 @@ func (f *Fleet) loadProfiles(seed model.Policy) error {
 	if err := f.st.UpgradeModelDefaults(); err != nil {
 		return err
 	}
+	if err := f.st.RenameLegacyMCPTools(); err != nil {
+		return err
+	}
 	upgraded, err := f.st.ListProfiles()
 	if err != nil {
 		return err

@@ -31,7 +31,8 @@ type env struct {
 	chat      *fake.Runner
 	term      *fake.Runner
 	guard     *guard.Settings
-	bypass    *bool // Options.AgentBypass (nil = the default, on)
+	bypass    *bool    // Options.AgentBypass (nil = the default, off)
+	authority []string // Options.FleetAuthorities (nil = none)
 	accounts  AccountHomes
 	// hostExe and termRunner: session hosts (hosting_test.go); nil/"" = none, e.term.
 	hostExe    string
@@ -81,10 +82,11 @@ func (e *env) fleet() *Fleet {
 		Store: e.st, Paths: config.Paths{Home: e.home}, HostExecutable: e.hostExe,
 		Runners: map[model.Mode]runner.Runner{model.ModeChat: chat, model.ModeTerminal: term},
 		Machine: "testbox", Version: "test", Workspace: e.workspace, URL: "http://127.0.0.1:1",
-		Executable:  "/opt/tmx/tmx",
-		Guard:       e.guard,
-		AgentBypass: e.bypass,
-		Accounts:    e.accounts,
+		Executable:       "/opt/tmx/tmx",
+		Guard:            e.guard,
+		AgentBypass:      e.bypass,
+		FleetAuthorities: e.authority,
+		Accounts:         e.accounts,
 	})
 	if err != nil {
 		e.t.Fatal(err)
@@ -190,8 +192,8 @@ func TestHeadBootstrap(t *testing.T) {
 	if p == nil {
 		t.Fatal("head not started")
 	}
-	if p.Spec.Model != opus || !slices.Equal(p.Spec.AllowedTools, []string{"mcp__tmxg"}) ||
-		!strings.Contains(p.Spec.SystemPrompt, "head agent") || p.Spec.PermissionMode != "bypassPermissions" { // guarded: bypass (guard.go)
+	if p.Spec.Model != opus || !slices.Equal(p.Spec.AllowedTools, []string{"mcp__tmx"}) ||
+		!strings.Contains(p.Spec.SystemPrompt, "head agent") || p.Spec.PermissionMode != "auto" { // bypass only on the owner's opt-in (guard.go)
 		t.Fatalf("spec: %+v", p.Spec)
 	}
 	// New conversation: id assigned up front, not resumed.
@@ -214,7 +216,7 @@ func TestHeadBootstrap(t *testing.T) {
 		t.Fatal(err)
 	}
 	json.Unmarshal(b, &cfg)
-	srv := cfg.MCPServers["tmxg"]
+	srv := cfg.MCPServers["tmx"]
 	if srv.Command != "/opt/tmx/tmx" || !slices.Equal(srv.Args, []string{"mcp"}) ||
 		srv.Env[EnvAgent] != h.ID || srv.Env[EnvURL] != "http://127.0.0.1:1" || len(srv.Env[EnvToken]) != 64 {
 		t.Fatalf("mcp.json: %s", b)
@@ -549,7 +551,7 @@ func TestMailBatchingAtIdle(t *testing.T) {
 	lp.Turn("planned", 0.25, 1)
 	eventually(t, "batched delivery", func() bool { return len(lp.Sent()) == 2 })
 	batch := lp.Sent()[1]
-	if batch != "[message from w1 (worker)] step 1 done\n\n[message from w1 (worker)] step 2 done" {
+	if batch != "[message from w1 (worker)]\n│ step 1 done\n\n[message from w1 (worker)]\n│ step 2 done" {
 		t.Fatalf("batch: %q", batch)
 	}
 	a := mustAgent(t, f, "alpha-lead")

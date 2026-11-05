@@ -115,7 +115,7 @@ func TestTurnSessionAndArgs(t *testing.T) {
 		t.Fatalf("%q: %v", res.Text, err)
 	}
 	args := strings.Join(got.Args, " ")
-	if got.Args[0] != "app-server" || !strings.Contains(args, `mcp_servers.tmxg.env_vars=["TMXG_AGENT_TOKEN"]`) || strings.Contains(args, "tok") {
+	if got.Args[0] != "app-server" || !strings.Contains(args, `mcp_servers.tmx.env_vars=["TMXG_AGENT_TOKEN"]`) || strings.Contains(args, "tok") {
 		t.Fatalf("args %s", args)
 	}
 	if got.Token != "tok" {

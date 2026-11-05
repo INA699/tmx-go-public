@@ -1,14 +1,15 @@
 package api
 
-// The owner PIN at the machine itself (#187, architect 3 Nov 17:21): the PIN is THE owner
-// factor on every device. Paired browsers already answer owner confirmations with it
-// (requireBrowserOwner + POST /api/gate/approvals/{id}/pin); these routes let the local page
-// do the same, and make Windows Hello an optional shortcut there.
+// The owner PIN at the machine itself (#187). Paired browsers answer owner confirmations with
+// the PIN (requireBrowserOwner + POST /api/gate/approvals/{id}/pin). At the machine the OS
+// prompt (Touch ID / Windows Hello) comes first where the platform has one, and the PIN is the
+// fallback; these routes let the local page answer with the PIN and turn the OS prompt off.
 //
 //   POST /api/gate/confirmations/{id}/pin {pin}  the owner on this machine: answer one pending
 //                                                gate confirmation with the PIN
-//   PUT  /api/gate/hello {enabled}               the owner on this machine: also offer the OS
-//                                                prompt (Windows Hello / Touch ID); off needs a PIN
+//   PUT  /api/gate/hello {enabled}               the owner on this machine: offer the OS prompt
+//                                                (Windows Hello / Touch ID; on by default); off
+//                                                needs a PIN
 
 import (
 	"errors"
@@ -85,9 +86,9 @@ func (s *Server) putHelloShortcut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if on != s.gate.HelloShortcut() {
-		reason := "stop offering Windows Hello at this machine (the PIN stays)"
+		reason := "stop offering Windows Hello / Touch ID at this machine (the PIN stays)"
 		if on {
-			reason = "also accept Windows Hello at this machine"
+			reason = "offer Windows Hello / Touch ID at this machine again"
 		}
 		if !s.requireOwner(w, r, gate.Action{Reason: reason, Key: actionKey(r, req), Always: true, Fresh: true}) {
 			return

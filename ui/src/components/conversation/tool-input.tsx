@@ -1,5 +1,5 @@
 import { CheckCircle2, Circle, CircleDot } from "lucide-react";
-import { asInput, langFromPath } from "@/lib/tools";
+import { asInput, langFromPath, tmxTool } from "@/lib/tools";
 import { relPath } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { CodeBlock } from "../code-block";
@@ -107,11 +107,12 @@ export function ToolInputView({ tool, input, cwd, compact, hidePath }: { tool?: 
       );
     }
   }
-  if (tool === "mcp__tmxg__whatsapp_send") {
+  const own = tmxTool(tool);
+  if (own === "whatsapp_send") {
     // the line above names the chat; here only the words that would go out
     return <div className="rounded-md border-l-2 bg-muted/40 px-3 py-2 text-sm whitespace-pre-wrap">{str(i.text ?? i.body)}</div>;
   }
-  if (tool === "mcp__tmxg__send" || tool === "mcp__tmxg__report" || tool === "mcp__tmxg__reply") {
+  if (own === "send" || own === "report" || own === "reply") {
     return (
       <div className="space-y-1.5">
         {i.to != null && <Field label="to">{str(i.to)}</Field>}

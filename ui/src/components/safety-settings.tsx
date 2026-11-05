@@ -112,7 +112,7 @@ function GuardCard({ g }: { g: GuardSettings }) {
 const STATE_LABEL: Record<RuleState, string> = { block: "Blocked", hold: "Held for me", allow: "Allowed" };
 
 /**
- * A rule's switch (the owner, 3 Nov): three ways on the Blocked list, Held for me / Allowed on the
+ * A rule's switch: three ways on the Blocked list, Held for me / Allowed on the
  * Held list. Each flip asks for your PIN (or Windows Hello at the machine) and is logged.
  */
 function RuleSwitch({ r, onSaved }: { r: GuardRule; onSaved: (g: GuardSettings, rules: GuardRule[]) => void }) {
@@ -407,8 +407,9 @@ function GraceRow({ gate }: { gate: GateStatus }) {
 }
 
 /**
- * Windows Hello / Touch ID at this machine: an optional shortcut beside the owner PIN, which
- * works on every device (#187). Off is refused while no PIN is set: it would be the last way in.
+ * Windows Hello / Touch ID at this machine: asked first by default, the owner PIN being the
+ * fallback here and the way in on paired devices. Off (PIN only) is refused while no PIN is
+ * set: it would be the last way in.
  */
 function HelloRow({ gate }: { gate: GateStatus }) {
   const [busy, setBusy] = useState(false);
@@ -418,7 +419,7 @@ function HelloRow({ gate }: { gate: GateStatus }) {
     try {
       const st = await api.putHello(next);
       if (st) setGateStatus(st);
-      toast.success(next ? "Windows Hello is offered too" : "Only your owner PIN now");
+      toast.success(next ? "Windows Hello / Touch ID is asked first again" : "Only your owner PIN now");
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -428,11 +429,11 @@ function HelloRow({ gate }: { gate: GateStatus }) {
   return (
     <ToggleRow
       id="gate-hello"
-      label="Also accept Windows Hello on this machine"
+      label="Use Windows Hello / Touch ID on this machine"
       hint={
         gate.pin_set
-          ? "Your owner PIN always works, here and on your paired devices. This only adds a shortcut at this machine."
-          : "Set your owner PIN first: until then Windows Hello is the only way to confirm here."
+          ? "Asked first at this machine. Your owner PIN always works too, here and on your paired devices."
+          : "Set your owner PIN first: until then Windows Hello / Touch ID is the only way to confirm here."
       }
       checked={on}
       disabled={busy || (on && !gate.pin_set)}
@@ -510,7 +511,7 @@ function GateCard() {
         <LifeBuoy className="mt-px size-3.5 shrink-0" />
         <div className="min-w-0 space-y-1">
           <p>
-            {gate.recovery || "The gate protects tmx actions, never your computer login or files. See the documented offline recovery procedure if confirmation stops working."}
+            {gate.recovery || "The gate protects Tiamatrix actions, never your computer login or files. See the documented offline recovery procedure if confirmation stops working."}
           </p>
           {gate.file && (
             <div className="flex min-w-0 items-center gap-1">

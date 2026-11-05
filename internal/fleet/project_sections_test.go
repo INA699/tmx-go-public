@@ -106,20 +106,26 @@ func TestProjectSectionFeedbackRouting(t *testing.T) {
 			f.agents["lead"].a.State = model.StateStopped
 			f.agents["replacement"] = &agentRec{a: model.Agent{ID: "replacement", Name: "replacement", ProjectID: p.ID, Level: model.LevelLead, State: model.StateIdle}}
 		}},
-		{"shell", "none", func(f *Fleet, p *model.Project, s *model.ProjectSection) {
+		{"shell", "head", func(f *Fleet, p *model.Project, s *model.ProjectSection) {
 			f.agents["lead"].a.Harness = model.HarnessShell
 		}},
-		{"paused", "none", func(f *Fleet, p *model.Project, s *model.ProjectSection) {
+		{"paused", "head", func(f *Fleet, p *model.Project, s *model.ProjectSection) {
 			f.agents["lead"].a.State = model.StatePaused
 		}},
 		{"unknown", "live-lead", func(f *Fleet, p *model.Project, s *model.ProjectSection) { s.Lead = "missing" }},
-		{"ambiguous", "tmx-lead", func(f *Fleet, p *model.Project, s *model.ProjectSection) {
+		{"ambiguous", "head", func(f *Fleet, p *model.Project, s *model.ProjectSection) {
 			s.Lead = "missing"
 			f.agents["other"] = &agentRec{a: model.Agent{ID: "other", Name: "other", ProjectID: p.ID, Level: model.LevelLead, State: model.StateIdle}}
+			// An agent's name is no route: only the project's leads and the head are.
 			f.agents["fallback"] = &agentRec{a: model.Agent{ID: "fallback", Name: "tmx-lead", State: model.StateWorking}}
 		}},
-		{"no fallback", "none", func(f *Fleet, p *model.Project, s *model.ProjectSection) {
+		{"exited, head down", "none", func(f *Fleet, p *model.Project, s *model.ProjectSection) {
 			f.agents["lead"].a.State = model.StateExited
+			f.agents["head"].a.State = model.StateStopped
+		}},
+		{"no head", "none", func(f *Fleet, p *model.Project, s *model.ProjectSection) {
+			f.agents["lead"].a.State = model.StateExited
+			delete(f.agents, "head")
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -251,9 +257,8 @@ func TestProjectSectionWriteAuthority(t *testing.T) {
 	}
 }
 
-// A peer machine (PeerCaller) has no agent record on this box (callerRecLocked returns nil for
-// it, same as the owner) but must never pass as a project member, lead or owner here - unlike
-// agent-operation routes, a peer is never owner-equivalent for a project's own content.
+// A peer machine (PeerCaller) has no agent record on this box and must never pass as a project
+// member, lead or owner here.
 func TestProjectSectionRefusesPeer(t *testing.T) {
 	_, f, p := sectionFixture(t)
 	status, lead, out := "from a peer", "lead", []model.ProjectOutput{{Path: "out/report.txt"}}

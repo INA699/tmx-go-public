@@ -1,6 +1,6 @@
 # Posts the public CI result as commit status "public-ci" on the PRIVATE head commit.
-# Runs only for the mirror's own pushes to pr/** or fleet/main. Outside PRs are event "pull_request"
-# and are skipped by the `if`. workflow_run always runs the DEFAULT-branch (fleet/main) copy of this
+# Runs only for the mirror's own pushes to pr/** or main. Outside PRs are event "pull_request"
+# and are skipped by the `if`. workflow_run always runs the DEFAULT-branch (main) copy of this
 # file, and only the mirror deploy key may push there.
 #
 # Identity (tmx-lead, review #155): a dedicated GitHub App, never the reviewer's or the owner's
@@ -20,7 +20,7 @@ jobs:
     if: >-
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
-      (startsWith(github.event.workflow_run.head_branch, 'pr/') || github.event.workflow_run.head_branch == 'fleet/main')
+      (startsWith(github.event.workflow_run.head_branch, 'pr/') || github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

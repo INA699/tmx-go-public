@@ -187,7 +187,7 @@ export class MockChats {
       if (id === "restart" && method === "POST") return { restarting: true, back_in: "about 15 seconds" };
       if (method === "PUT" && !id) this.myName = (b.name ?? "").trim() || this.myName;
       return {
-        enabled: this.p2pSavedEnabled, peer_id: ME, name: this.myName, addrs: this.p2pSavedEnabled ? ["/ip4/127.0.0.1/udp/4001/quic-v1"] : [],
+        enabled: this.p2pSavedEnabled, peer_id: ME, name: this.myName, addrs: this.p2pSavedEnabled ? ["/ip4/192.168.1.20/udp/41234/quic-v1", "/ip4/192.168.1.20/tcp/41234"] : [],
         reachability: this.p2pSavedEnabled ? "direct" : "offline", peers: this.p2pSavedEnabled ? 6 : 0,
         saved_enabled: this.p2pSavedEnabled, restart_to_apply: false, production: true,
       };

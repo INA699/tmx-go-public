@@ -96,7 +96,7 @@ export function UpdateSection() {
               <div className="min-w-0">
                 <p className="[overflow-wrap:anywhere]">{h.text}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  This is tmx <span className="font-mono">{s.current}</span>
+                  This is Tiamatrix <span className="font-mono">{s.current}</span>
                   {s.checked_at ? ` · checked ${relativeTime(s.checked_at)}` : ""}
                   {s.latest_url && s.available && (
                     <>
@@ -137,7 +137,7 @@ export function UpdateSection() {
           )}
           {!off && (
             <>
-              <Row label="Install updates automatically" hint="New releases download, are checked against tmx's signature, and install once no agent is busy.">
+              <Row label="Install updates automatically" hint="New releases download, are checked against Tiamatrix's signature, and install once no agent is busy.">
                 <Switch
                   checked={s.auto}
                   disabled={!!busy}
@@ -146,7 +146,7 @@ export function UpdateSection() {
                   className="mt-1"
                 />
               </Row>
-              <Row label="Channel" hint="Stable: fleet releases. Latest: also includes fleet prereleases.">
+              <Row label="Channel" hint="Stable: v* releases. Latest: also prereleases and release candidates.">
                 <Select value={s.channel} onValueChange={(v) => void run("channel", () => updateApi.configure({ channel: v as "stable" | "latest" }))}>
                   <SelectTrigger className="w-56" aria-label="Update channel">
                     <SelectValue />

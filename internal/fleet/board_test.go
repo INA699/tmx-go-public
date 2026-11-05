@@ -76,8 +76,8 @@ func TestBoardTopicsMailAndCards(t *testing.T) {
 	}
 	hp.State(model.StateWorking)
 	waitState(t, f, "head", model.StateWorking)
-	toolUse(hp, "mcp__tmxg__send", map[string]any{"to": "owner", "body": "Drafting it now."})
-	toolUse(hp, "mcp__tmxg__agent_launch", map[string]any{"name": "copywriter", "project": "alpha"})
+	toolUse(hp, "mcp__tmx__send", map[string]any{"to": "owner", "body": "Drafting it now."})
+	toolUse(hp, "mcp__tmx__agent_launch", map[string]any{"name": "copywriter", "project": "alpha"})
 
 	// Meanwhile a General message waits for the end of the turn instead of joining it.
 	m, err := f.SendOwner("head", "how are things?", "")
@@ -95,7 +95,7 @@ func TestBoardTopicsMailAndCards(t *testing.T) {
 	eventually(t, "general message delivered alone", func() bool { return lastSent(hp) == "[message from owner] how are things?" })
 	hp.Turn("All quiet.", 0.01, 1)
 	eventually(t, "lead report delivered in its topic", func() bool {
-		return lastSent(hp) == "[topic: Alpha]\n[message from alpha-lead (lead)] alpha plan ready"
+		return lastSent(hp) == "[topic: Alpha]\n[message from alpha-lead (lead)]\n│ alpha plan ready"
 	})
 	hp.Turn("Thanks, go ahead.", 0.01, 1)
 
@@ -154,7 +154,7 @@ func TestBoardFilesTurnsByProject(t *testing.T) {
 		t.Fatal(err)
 	}
 	hp.State(model.StateWorking)
-	toolUse(hp, "mcp__tmxg__project_create", map[string]any{"name": "Shop"})
+	toolUse(hp, "mcp__tmx__project_create", map[string]any{"name": "Shop"})
 	p, err := f.CreateProject(OwnerCaller, ProjectRequest{Name: "Shop"}) // what the tool call did
 	if err != nil {
 		t.Fatal(err)
@@ -182,7 +182,7 @@ func TestBoardFilesTurnsByProject(t *testing.T) {
 	if strings.Join(topics, ",") != "General,Shop,Payments" {
 		t.Fatalf("topics: %v", topics)
 	}
-	toolUse(hp, "mcp__tmxg__send", map[string]any{"to": "shop-lead", "body": "Stripe or PayPal?"})
+	toolUse(hp, "mcp__tmx__send", map[string]any{"to": "shop-lead", "body": "Stripe or PayPal?"})
 	ask, err := f.SendMessage(hc, SendRequest{To: "shop-lead", Body: "Stripe or PayPal?"})
 	if err != nil || ask.ThreadID != th.ID {
 		t.Fatalf("head mail thread: %+v %v", ask, err)
@@ -193,7 +193,7 @@ func TestBoardFilesTurnsByProject(t *testing.T) {
 		t.Fatalf("reply thread: %+v %v", ans, err)
 	}
 	// A question asked in the topic is answered in it.
-	toolUse(hp, "mcp__tmxg__ask_owner", map[string]any{"question": "Which currency?"})
+	toolUse(hp, "mcp__tmx__ask_owner", map[string]any{"question": "Which currency?"})
 	q, err := f.AskOwner(hc, AskRequest{Question: "Which currency?"})
 	if err != nil || q.ThreadID != th.ID {
 		t.Fatalf("question thread: %+v %v", q, err)
@@ -258,6 +258,7 @@ func TestBoardFilesOldHistory(t *testing.T) {
 	entries := []model.TimelineEntry{
 		{Kind: model.EntrySystem, Text: "started"},
 		{Kind: model.EntryUser, Text: "make beta", Meta: map[string]any{"from": "owner"}},
+		// The name builds called tmxg recorded: still read (model.TmxTool).
 		{Kind: model.EntryToolUse, Tool: "mcp__tmxg__project_create", Input: json.RawMessage(`{"name":"Beta"}`)},
 		{Kind: model.EntryResult},
 		{Kind: model.EntryMessageIn, Text: "beta done", Meta: map[string]any{"from": lead.ID, "from_name": "beta-lead"}},
@@ -436,7 +437,7 @@ func TestThreadLogs(t *testing.T) {
 		"empty":     {Thread: topic.ID, Kind: "info", Text: "  "},
 		"too long":  {Thread: topic.ID, Kind: "info", Text: strings.Repeat("x", 401)},
 		"4 lines":   {Thread: topic.ID, Kind: "info", Text: "a\nb\nc\nd"},
-		"secret":    {Thread: topic.ID, Kind: "info", Text: "the staging api_key: sk-live-abcdefghijklmnop1234"},
+		"secret":    {Thread: topic.ID, Kind: "info", Text: "the staging api_key: " + strings.Repeat("test", 10)},
 		"no topic":  {Kind: "info", Text: "x"},
 		"bad fix":   {Thread: topic.ID, Kind: "info", Text: "x", Corrects: "nope"},
 		"elsewhere": {Thread: shop, Kind: "info", Text: "x", Corrects: d1.ID},
@@ -476,7 +477,7 @@ func TestThreadLogs(t *testing.T) {
 	f.mu.Lock()
 	prompt := f.systemPromptLocked(lead)
 	f.mu.Unlock()
-	if !strings.Contains(prompt, "mcp__tmxg__thread_add") || !strings.Contains(prompt, "Payments: Stripe checkout behind a flag.") {
+	if !strings.Contains(prompt, "mcp__tmx__thread_add") || !strings.Contains(prompt, "Payments: Stripe checkout behind a flag.") {
 		t.Fatalf("lead prompt: %s", prompt)
 	}
 	if _, err := f.SendOwner("head", "status?", topic.ID); err != nil {

@@ -9,9 +9,11 @@ import { launchBrowser, openPage, signIn, startDaemon } from "./harness.mjs";
 const PAGES = ["/", "/inbox", "/matrix", "/board", "/recordings", "/settings"]; // /board: the Board's old address opens the Matrix
 const TOKEN_SCREEN = /needs your owner token|Pair this device/i;
 
-test("phone-size pages load without a token loop", { timeout: 5 * 60_000 }, async () => {
+test("phone-size pages load without a token loop", { timeout: 5 * 60_000 }, async t => {
   const d = await startDaemon();
+  t.after(() => d.stop());
   const browser = await launchBrowser();
+  t.after(() => browser.close());
   try {
     const { page, errors } = await openPage(browser, { phone: true, origin: d.url });
     await signIn(page, d);
@@ -38,19 +40,18 @@ test("phone-size pages load without a token loop", { timeout: 5 * 60_000 }, asyn
   } catch (e) {
     console.log("daemon log (tail):\n" + d.log.slice(-40).join(""));
     throw e;
-  } finally {
-    await browser.close();
-    await d.stop();
   }
 });
 
-// The owner's phone report (3 Nov): installed as an app, still had the browser's top/bottom bars — Chrome had
+// A phone report: installed as an app, it still had the browser's top/bottom bars — Chrome had
 // fallen back to a bookmark shortcut. This is the real proof it now installs as an app: Chrome's own
 // installability check (the same one behind the "Install app" prompt) reports no errors, and the manifest it
 // read back declares standalone display.
-test("the UI is installable as a standalone PWA", { timeout: 2 * 60_000 }, async () => {
+test("the UI is installable as a standalone PWA", { timeout: 2 * 60_000 }, async t => {
   const d = await startDaemon({ phone: true });
+  t.after(() => d.stop());
   const browser = await launchBrowser();
+  t.after(() => browser.close());
   try {
     const { page, cdp, errors } = await openPage(browser, { phone: true, origin: d.proxy.origin });
     await page.goto(d.proxy.origin);
@@ -69,8 +70,5 @@ test("the UI is installable as a standalone PWA", { timeout: 2 * 60_000 }, async
   } catch (e) {
     console.log("daemon log (tail):\n" + d.log.slice(-40).join(""));
     throw e;
-  } finally {
-    await browser.close();
-    await d.stop();
   }
 });

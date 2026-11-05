@@ -22,9 +22,11 @@ const COUNT_MEDIA = `(() => {
   md.getDisplayMedia = c => { window.__media.screen++; return gdm(c); };
 })();`;
 
-test(`recorder: one Record button, screen + camera + mic, ${MINUTES} real minutes with a ${OUTAGE_MS / 1000}-s outage, one recording with its summary`, { timeout: (MINUTES + 8) * 60_000 }, async () => {
+test(`recorder: one Record button, screen + camera + mic, ${MINUTES} real minutes with a ${OUTAGE_MS / 1000}-s outage, one recording with its summary`, { timeout: (MINUTES + 8) * 60_000 }, async t => {
   const d = await startDaemon({ config: { recorder: { segment_minutes: Math.max(1, Math.round(SEG_MIN)) } } });
+  t.after(() => d.stop());
   const browser = await launchBrowser();
+  t.after(() => browser.close());
   try {
     const { context, page, errors } = await openPage(browser, { origin: d.url });
     await context.addInitScript(COUNT_MEDIA);
@@ -32,7 +34,7 @@ test(`recorder: one Record button, screen + camera + mic, ${MINUTES} real minute
     await page.evaluate(() => { location.hash = "/recordings"; });
     await page.getByRole("button", { name: /^Record$/ }).waitFor();
 
-    // ONE Record button on the page (the owner: "ONE Record button")
+    // ONE Record button on the page
     const records = await visibleButtons(page, /^\s*Record\s*$/);
     assert.equal(records.length, 1, `exactly one Record button, got ${JSON.stringify(records)}`);
 
@@ -108,8 +110,5 @@ test(`recorder: one Record button, screen + camera + mic, ${MINUTES} real minute
   } catch (e) {
     console.log("daemon log (tail):\n" + d.log.slice(-60).join(""));
     throw e;
-  } finally {
-    await browser.close();
-    await d.stop();
   }
 });

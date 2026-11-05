@@ -187,7 +187,7 @@ type WaSendInput struct {
 const ApprovalWhatsApp ApprovalKind = "whatsapp"
 
 // ToolWhatsAppSend is Approval.Tool for an agent's WhatsApp message.
-const ToolWhatsAppSend = "mcp__tmxg__whatsapp_send"
+const ToolWhatsAppSend = "mcp__tmx__whatsapp_send"
 
 // WhatsAppParty is the From of mail the WhatsApp service sends agents: new messages in a chat
 // the owner chose ("tell the head"), and the outcome of a message an agent asked to send.

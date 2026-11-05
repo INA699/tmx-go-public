@@ -110,7 +110,7 @@ func TestLaunchByProfile(t *testing.T) {
 		t.Fatalf("reviewer: %+v", rv)
 	}
 	spec := e.chat.Last(rv.ID).Spec
-	if !slices.Equal(spec.DisallowedTools, model.ReadOnlyDenied) || !slices.Equal(spec.AllowedTools, []string{"mcp__tmxg"}) {
+	if !slices.Equal(spec.DisallowedTools, model.ReadOnlyDenied) || !slices.Equal(spec.AllowedTools, []string{"mcp__tmx"}) {
 		t.Fatalf("tools: %+v / %+v", spec.AllowedTools, spec.DisallowedTools)
 	}
 	for _, want := range []string{`You are "rv", a reviewer in project "alpha"`, "You report to alpha-lead", readOnlyNote, mailRules} {
@@ -202,7 +202,7 @@ func TestProfileCRUD(t *testing.T) {
 	}
 	spec := e.chat.Last(a.ID).Spec
 	if a.Model != haiku || !strings.HasPrefix(spec.SystemPrompt, "You are dw in alpha; {{unknown}} stays.") ||
-		!slices.Equal(spec.AllowedTools, []string{"mcp__tmxg", "Read", "Bash(git log:*)"}) ||
+		!slices.Equal(spec.AllowedTools, []string{"mcp__tmx", "Read", "Bash(git log:*)"}) ||
 		!slices.Equal(spec.DisallowedTools, []string{"WebFetch"}) {
 		t.Fatalf("spec %+v", spec)
 	}

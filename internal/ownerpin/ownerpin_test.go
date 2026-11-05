@@ -88,23 +88,21 @@ func TestBackoffNeverPermanent(t *testing.T) {
 	if err := s.Verify("a", "123456"); !errors.As(err, &w) { // even the right PIN waits
 		t.Fatal(err)
 	}
-	if s.Verify("b", "123456") != nil { // another source is unaffected
-		t.Fatal("b")
+	// The 5th wrong PIN in a row locks every source, not only "a" (a fresh nonce, cookie or
+	// device is no way round it).
+	if err := s.Verify("b", "123456"); !errors.As(err, &w) || s.Wait("b") != time.Minute {
+		t.Fatal("b", err, s.Wait("b"))
 	}
-	for i := 6; i <= 10; i++ {
-		now = now.Add(61 * time.Second)
-		s.Verify("a", "000000")
-	}
-	if s.Wait("a") != 900*time.Second {
-		t.Fatal("10th", s.Wait("a"))
-	}
-	now = now.Add(901 * time.Second)
-	if s.Verify("a", "123456") != nil || s.Wait("a") != 0 {
+	now = now.Add(61 * time.Second)
+	if s.Verify("a", "123456") != nil || s.Wait("a") != 0 || s.Wait("b") != 0 {
 		t.Fatal("never permanent")
 	}
-	for i := 0; i < 12; i++ {
-		now = now.Add(901 * time.Second)
+	for i := 0; i < 30; i++ {
+		now = now.Add(GlobalMaxWait + time.Second)
 		s.Verify("a", "000000")
+	}
+	if s.Wait("a") != GlobalMaxWait {
+		t.Fatal("cap", s.Wait("a"))
 	}
 	s.ClearBackoff()
 	if s.Verify("a", "123456") != nil {
@@ -112,25 +110,83 @@ func TestBackoffNeverPermanent(t *testing.T) {
 	}
 }
 
-func TestAdoptNewestWins(t *testing.T) {
+func TestGlobalWaitEscalates(t *testing.T) {
+	for n, want := range map[int]time.Duration{0: 0, 4: 0, 5: time.Minute, 6: 2 * time.Minute, 7: 4 * time.Minute,
+		12: 128 * time.Minute, 13: GlobalMaxWait, 100: GlobalMaxWait, 1 << 20: GlobalMaxWait} {
+		if got := globalWait(n); got != want {
+			t.Errorf("globalWait(%d) = %v, want %v", n, got, want)
+		}
+	}
+}
+
+// Every source counts towards one machine-wide lockout: a new source per guess (the local UI's
+// nonce, a dropped cookie) gets 5 guesses in a row, then waits 1 min, 2 min, ... up to 4 h.
+func TestGlobalLockoutAcrossSources(t *testing.T) {
 	now := time.Unix(1_800_000_000, 0)
 	s := Open(filepath.Join(t.TempDir(), "p.json"))
 	s.Now = func() time.Time { return now }
-	mine, _ := s.Set("111111")
-	older, _ := NewRecord("222222", now.Add(-time.Hour))
-	if ok, _ := s.Adopt(older); ok {
-		t.Fatal("older adopted")
+	s.Set("123456")
+	guess := 0
+	try := func(pin string) error { guess++; return s.Verify(fmt.Sprint("local:", guess), pin) }
+	for i := 1; i <= GlobalFree; i++ {
+		if err := try("000000"); !errors.Is(err, ErrWrong) {
+			t.Fatal(i, err)
+		}
 	}
-	newer, _ := NewRecord("333333", now.Add(time.Minute))
-	if ok, err := s.Adopt(newer); !ok || err != nil || s.Verify("x", "333333") != nil {
-		t.Fatal("newer", err)
+	var w *WaitError
+	for _, want := range []time.Duration{time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute} {
+		if err := try("123456"); !errors.As(err, &w) || w.Wait != want {
+			t.Fatalf("want a %v wait, got %v", want, err)
+		}
+		now = now.Add(want)
+		if err := try("000000"); !errors.Is(err, ErrWrong) {
+			t.Fatal(err)
+		}
 	}
-	future, _ := NewRecord("444444", now.Add(301*time.Second))
-	if _, err := s.Adopt(future); err == nil {
-		t.Fatal("future")
+	now = now.Add(16 * time.Minute)
+	if err := try("123456"); err != nil {
+		t.Fatal("the right PIN after the wait", err)
 	}
-	if _, err := s.Adopt(Record{Salt: "00", Hash: mine.Hash, Set: float64(now.Add(2 * time.Minute).Unix())}); err == nil {
-		t.Fatal("bad salt")
+	if err := try("000000"); !errors.Is(err, ErrWrong) || s.Wait("x") != 0 {
+		t.Fatal("the right PIN resets the machine-wide count", err, s.Wait("x"))
+	}
+}
+
+// The machine-wide count survives a restart; a damaged file fails closed; clearing it at the
+// machine is written down too.
+func TestGlobalLockoutSurvivesRestart(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "secrets", "owner-pin.json")
+	s := Open(p)
+	s.Set("123456")
+	for i := 0; i < GlobalFree; i++ {
+		s.Verify(fmt.Sprint("src", i), "000000")
+	}
+	if s.Wait("new") <= 0 {
+		t.Fatal("no wait after 5 wrong PINs")
+	}
+	again := Open(p)
+	var w *WaitError
+	if err := again.Verify("new", "123456"); !errors.As(err, &w) {
+		t.Fatal("a restart cleared the wait", err)
+	}
+	// After the wait the count goes on from 5: the next wrong PIN waits 2 min.
+	later := time.Now().Add(GlobalFirstWait + time.Second)
+	again.Now = func() time.Time { return later }
+	if err := again.Verify("new", "000000"); !errors.Is(err, ErrWrong) || again.Wait("new") < 2*time.Minute-time.Second {
+		t.Fatal("count not kept", err, again.Wait("new"))
+	}
+	again.ClearBackoff()
+	if Open(p).Wait("new") != 0 {
+		t.Fatal("clear not saved")
+	}
+	if err := os.WriteFile(TriesPath(p), []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if Open(p).Wait("new") <= 0 {
+		t.Fatal("a damaged count must wait, not reset")
+	}
+	if TriesPath(p) != filepath.Join(filepath.Dir(p), "owner-pin-tries.json") {
+		t.Fatal(TriesPath(p))
 	}
 }
 
@@ -161,7 +217,9 @@ func TestParallelGuessesAreCounted(t *testing.T) {
 	if s.Wait("pair:host") == 0 && checked.Load() == 5 {
 		t.Fatal("5 wrong guesses but no wait")
 	}
-	// Many sources at once: never more than MaxChecks in flight.
+	// Many sources at once: never more than MaxChecks in flight, and no more than GlobalFree
+	// wrong guesses checked before the machine-wide wait.
+	var wrong atomic.Int32
 	var peak atomic.Int32
 	s2 := Open(filepath.Join(t.TempDir(), "q.json"))
 	s2.Set("123456")
@@ -175,11 +233,16 @@ func TestParallelGuessesAreCounted(t *testing.T) {
 			if n > peak.Load() {
 				peak.Store(n)
 			}
-			s2.Verify(fmt.Sprint("src", i), "000000")
+			if errors.Is(s2.Verify(fmt.Sprint("src", i), "000000"), ErrWrong) {
+				wrong.Add(1)
+			}
 		}(i)
 	}
 	wg.Wait()
 	if peak.Load() > MaxChecks {
 		t.Fatal("peak", peak.Load())
+	}
+	if wrong.Load() > GlobalFree || s2.Wait("any") == 0 && wrong.Load() == GlobalFree {
+		t.Fatal("machine-wide", wrong.Load(), s2.Wait("any"))
 	}
 }

@@ -11,8 +11,8 @@ import (
 )
 
 // ExitDisabled is the exit code of the stubs a production start puts first on PATH for the
-// harnesses that must not run as agents there (Hostb's GO-PROD-START.ps1: codex and agy, since
-// the 9 Sep Codex sandbox lesson).
+// harnesses that must not run as agents there (e.g. codex and agy on a machine whose Codex
+// sandbox cannot be trusted).
 const ExitDisabled = 78
 
 // maxStub: a disabled stub is a few lines; anything bigger is a real launcher.

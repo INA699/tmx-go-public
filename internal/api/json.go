@@ -15,8 +15,8 @@ import (
 // Content-Length. encoding directly into w (json.NewEncoder(w).Encode) leaves net/http
 // unable to know the body's size ahead of the headers, and past its small buffer (a few KB)
 // it falls back to Transfer-Encoding: chunked - which the Python peers' HTTP client cannot
-// read (found 4 Nov: Hostb looked agent-less to Hosta/Hostc once any reply, e.g.
-// GET /api/sessions with enough agents, passed that size).
+// read (a daemon looked agent-less to its Python peers once any reply, e.g. GET
+// /api/sessions with enough agents, passed that size).
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	b, err := json.Marshal(v)
 	if err != nil {

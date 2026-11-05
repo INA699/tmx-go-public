@@ -418,7 +418,7 @@ func (f *Fleet) callerName(c Caller) string {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.nameOfLocked(c.AgentID)
+	return f.nameOfLocked(c.ID())
 }
 
 // resumeBy resumes a paused agent and returns the brake reason it was paused for.

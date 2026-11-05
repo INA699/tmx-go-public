@@ -37,7 +37,7 @@ func TestMatrixPromptsCarryThreads(t *testing.T) {
 	}
 
 	wp := promptOf(f, w.ID)
-	for _, want := range []string{"mcp__tmxg__thread_add", "result (with its evidence", "mcp__tmxg__matrix op=get",
+	for _, want := range []string{"mcp__tmx__thread_add", "result (with its evidence", "mcp__tmx__matrix op=get",
 		`"Buy computers" [` + th.ID + `] · active · owner ` + mustAgent(t, f, p.LeadID).Name, "Two laptops, under CHF 2,500", `"Shop"`} {
 		if !strings.Contains(wp, want) {
 			t.Fatalf("worker prompt lacks %q:\n%s", want, wp)

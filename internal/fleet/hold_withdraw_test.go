@@ -8,7 +8,7 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// The owner, 3 Nov 22:30 ("too safe"): an agent takes back its own pending hold; something allowed
+// Fewer needless holds: an agent takes back its own pending hold; something allowed
 // once is remembered so allowing it again needs no PIN.
 func TestWithdrawHoldAndAllowedBefore(t *testing.T) {
 	e := newEnv(t)
@@ -65,22 +65,19 @@ func TestWithdrawHoldAndAllowedBefore(t *testing.T) {
 	f.CancelHold(me, ap3.ID)
 	f.CancelHold(me, other.ID)
 
-	// Any other held rule: the same call allowed once is allowed again without a card.
+	// Any other held rule: the same call allowed once asks again with a card, but without the PIN.
 	push := HoldRequest{Tool: "Bash", Command: "git push --force origin main", Rule: guard.RuleGitRewrite, Cwd: "/w"}
 	first, _ := f.Hold(me, push)
 	if _, err := f.Decide(OwnerCaller, first.ID, DecideRequest{Decision: "allow"}); err != nil {
 		t.Fatal(err)
 	}
 	second, err := f.Hold(me, push)
-	if err != nil || second.State != model.ApprovalAllowed || second.Answer != AnswerSame {
-		t.Fatalf("same call again: %+v %v", second, err)
+	if err != nil || second.State != model.ApprovalPending || !f.AllowedBefore(second) {
+		t.Fatalf("same call again: state=%s allowedBefore=%v %v", second.State, f.AllowedBefore(second), err)
 	}
-	tl, _ = f.Timeline("head", 0, 200)
-	if !strings.Contains(tl[len(tl)-1].Text, "Allowed: same as approved") {
-		t.Fatalf("timeline: %q", tl[len(tl)-1].Text)
-	}
+	f.CancelHold(me, second.ID)
 	if third, _ := f.Hold(me, HoldRequest{Tool: "Bash", Command: "git push --force origin dev", Rule: guard.RuleGitRewrite, Cwd: "/w"}); third.State != model.ApprovalPending {
-		t.Fatal("a different command was auto-allowed")
+		t.Fatal("a different command was not held")
 	}
 	// go-reviewer-o4: as narrow as Allow always. Another folder (relative paths mean other files)
 	// asks again, and so does another kind of agent.
