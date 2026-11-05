@@ -109,7 +109,7 @@ func TestToolList(t *testing.T) {
 			if got != want {
 				t.Fatalf("tools: %s", got)
 			}
-			if cs.InitializeResult().ServerInfo.Name != "tmx" {
+			if cs.InitializeResult().ServerInfo.Name != "tmxg" {
 				t.Fatal("server name")
 			}
 		})

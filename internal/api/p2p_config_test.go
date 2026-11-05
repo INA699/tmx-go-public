@@ -36,7 +36,7 @@ func setProduction(t *testing.T, d *apitest.Daemon) {
 
 // effectiveDHT reflects what the daemon would actually start with (Config.EffectiveDHT), not
 // just the bare on-disk "dht" value - the defaulting now happens at daemon-start time so an
-// already-written config.json self-corrects with no new write.
+// already-written config.json (like Hostb's) self-corrects with no new write.
 func effectiveDHT(t *testing.T, d *apitest.Daemon) bool {
 	t.Helper()
 	c, err := config.Load(config.Paths{Home: d.Home})
@@ -46,7 +46,7 @@ func effectiveDHT(t *testing.T, d *apitest.Daemon) bool {
 	return c.EffectiveDHT()
 }
 
-// setProductionWithStaleDHTFalse matches a config seen in the field: an older
+// setProductionWithStaleDHTFalse matches Hostb's exact config, 3 Nov (tmx-lead): an older
 // fillDefaults wrote an explicit "dht":false to disk before production honoured the field at
 // all (cfc7be0/PR #176) - a value indistinguishable from a genuine owner choice by its bare
 // presence alone, which is why DHTExplicit exists.
@@ -144,12 +144,12 @@ func TestP2PConfigEnablingDefaultsDHTOn(t *testing.T) {
 	}
 }
 
-// A config seen in the field: an explicit "dht":false already on disk, written by older
+// Hostb's exact config, 3 Nov: an explicit "dht":false already on disk, written by older
 // fillDefaults code before production honoured the field at all (cfc7be0/PR #176) - bare
 // presence of "dht":false cannot by itself mean a genuine owner choice, so enabling still
 // defaults DHT on (Config.EffectiveDHT, via DHTExplicit rather than a nil check). The on-disk
 // value itself is left untouched; the default takes effect at daemon-start time, not by PUT
-// rewriting it, since the guard refuses config.json writes from an agent.
+// rewriting it, since Hostb's guard refuses config.json writes from an agent.
 func TestP2PConfigEnablingOverridesAStaleDHTFalse(t *testing.T) {
 	d := apitest.New(t)
 	setProductionWithStaleDHTFalse(t, d)

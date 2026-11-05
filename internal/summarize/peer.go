@@ -1,10 +1,10 @@
 package summarize
 
-// The local model on another of the owner's machines: a daemon without room for Ollama
-// (summaries.via_peer = "box") has its fleet peer's daemon run the generate for it, over that peer's pair-token
+// The local model on another machine of our own fleet (G5, tmx-lead 3 Nov): a daemon without room for Ollama
+// (summaries.via_peer = "hosta") has its fleet peer's daemon run the generate for it, over that peer's pair-token
 // route POST /api/peer/summarize-local. The serving daemon opts in per peer (summaries.serve_peers), takes only its
 // own local model, caps the size, runs one at a time and forwards only to its own loopback Ollama. Without the
-// route the cloud model writes the summary, except for a sensitive recording, which then fails with the reason (run).
+// route the cloud model writes the summary, except for a clinic recording, which then fails with the reason (run).
 
 import (
 	"context"

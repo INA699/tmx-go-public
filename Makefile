@@ -22,23 +22,23 @@ WAILS_VERSION := v2.17.0
 WAILS  ?= $(or $(shell command -v wails 2>/dev/null),$(shell $(GO) env GOPATH)/bin/wails)
 
 MODULE  := github.com/blackcode-ch/tmx-go
-VERSION ?= $(shell git describe --tags --match 'v[0-9]*' --always --dirty 2>/dev/null || echo dev)
+VERSION ?= $(shell git describe --tags --match 'fleet-v[0-9]*' --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X $(MODULE)/internal/config.Version=$(VERSION)
 export GOFLAGS := -p=$(JOBS)
 
 OS     := $(shell $(GO) env GOOS)
 ARCH   := $(shell $(GO) env GOARCH)
 EXE    := $(if $(filter windows,$(OS)),.exe,)
-APP    := build/bin/tmx.app
-BIN    := bin/tmx$(EXE)
+APP    := build/bin/tmxg.app
+BIN    := bin/tmxg$(EXE)
 
 # macOS: who signs tmx.app. "-" = ad hoc, a new identity in every build, so macOS forgets the
 # microphone and screen-recording permissions on every update. CI signs with the certificate from
 # `make signing-cert` (SIGN_IDENTITY = its SHA-1, SIGN_KEYCHAIN = scripts/signing-keychain.sh's keychain).
 SIGN_IDENTITY ?= -
 SIGN_KEYCHAIN ?=
-MIC_USAGE := Tiamatrix uses the microphone only while you record or dictate.
-CAM_USAGE := Tiamatrix uses the camera only while you record a camera clip.
+MIC_USAGE := tmx uses the microphone only while you record or dictate.
+CAM_USAGE := tmx uses the camera only while you record a camera clip.
 
 UI_SRC := $(shell find ui/src ui/public -type f 2>/dev/null) ui/index.html ui/vite.config.ts \
           ui/tsconfig.json ui/tsconfig.app.json ui/tsconfig.node.json ui/package.json ui/pnpm-lock.yaml
@@ -57,7 +57,7 @@ else
 build: app
 endif
 
-## app: desktop build (bin/tmx is the CLI; on macOS it points into build/bin/tmx.app)
+## app: desktop build (bin/tmxg is the CLI; on macOS it points into build/bin/tmxg.app)
 app: $(UI_OUT) | $(WAILS)
 	$(NICE) $(WAILS) build -m -s -skipbindings -tags desktop -trimpath -ldflags "$(LDFLAGS)"
 	@mkdir -p bin
@@ -73,19 +73,19 @@ ifeq ($(OS),darwin)
 	@# Info.plist changed, so sign again (always: an unsigned arm64 app does not start).
 	codesign --force --sign "$(SIGN_IDENTITY)" $(if $(SIGN_KEYCHAIN),--keychain "$(SIGN_KEYCHAIN)") $(APP)
 	@codesign --verify --deep --strict $(APP)
-	@ln -sfn ../$(APP)/Contents/MacOS/tmx $(BIN)
+	@ln -sfn ../$(APP)/Contents/MacOS/tmxg $(BIN)
 	@echo "built $(APP) (open it for the window); CLI: $(BIN)"
 else
-	@cp build/bin/tmx$(EXE) $(BIN)
+	@cp build/bin/tmxg$(EXE) $(BIN)
 	@echo "built $(BIN)"
 endif
 
-## app-windows: the Windows desktop exe, cross-built on any machine (Wails needs no cgo there): build/bin/tmx.exe
+## app-windows: the Windows desktop exe, cross-built on any machine (Wails needs no cgo there): build/bin/tmxg.exe
 app-windows: $(UI_OUT) | $(WAILS)
 	$(NICE) $(WAILS) build -m -s -skipbindings -tags desktop -trimpath -platform windows/amd64 -ldflags "$(LDFLAGS)"
-	@echo "built build/bin/tmx.exe"
+	@echo "built build/bin/tmxg.exe"
 
-## headless: bin/tmx without the window (daemon, CLI, MCP; no cgo)
+## headless: bin/tmxg without the window (daemon, CLI, MCP; no cgo)
 headless: $(UI_OUT)
 	@mkdir -p bin
 	@rm -f $(BIN)
@@ -97,11 +97,11 @@ dist: $(UI_OUT)
 	@mkdir -p dist
 	@set -e; for t in $(DIST_TARGETS); do \
 	  os=$${t%/*}; arch=$${t#*/}; ext=; [ $$os = windows ] && ext=.exe; \
-	  out=dist/tmx_$(VERSION)_$${os}_$${arch}$$ext; \
+	  out=dist/tmxg_$(VERSION)_$${os}_$${arch}$$ext; \
 	  echo "  $$out"; \
 	  CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(NICE) $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $$out .; \
 	done
-	@cd dist && shasum -a 256 tmx_$(VERSION)_* > SHA256SUMS && cat SHA256SUMS
+	@cd dist && shasum -a 256 tmxg_$(VERSION)_* > SHA256SUMS && cat SHA256SUMS
 
 ## ui: build the React UI into ui/dist (embedded into the binary)
 ui: $(UI_OUT)

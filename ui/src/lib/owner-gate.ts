@@ -1,9 +1,8 @@
 // The owner gate in the UI (DESIGN.md "Safety"). A gated request answers 428 with a
 // confirmation while the daemon itself asks the OS (Touch ID or the Mac password, Windows Hello); the UI only
 // shows "Confirm on this Mac", waits for the daemon's verdict and retries the same request
-// naming the confirmation. When the owner PIN may answer too (pin), "Use my PIN instead" lets
-// the owner type it while the OS prompt stays open. On a paired browser (method "pin") the
-// owner types the owner PIN instead; never a passkey.
+// naming the confirmation. On a paired browser (method "pin") the owner types the owner PIN
+// instead: one short code, the same on every machine and in the Python tmx; never a passkey.
 //
 // The grace window: after a proof the daemon stops asking for grace_minutes (Settings →
 // Safety's dial; it only skips the OS prompt, the owner still decides each action). The daemon
@@ -152,10 +151,9 @@ export async function cancelConfirmation() {
   cancelled = new Set([...cancelled, c.id]);
   useGate.setState({ confirming: null, pinError: null });
   if (pinWaiter?.id === c.id) {
-    const local = pinWaiter.local;
     pinWaiter.reject(new ApiError(0, "Cancelled."));
     pinWaiter = null;
-    if (!local) return; // a paired browser's PIN confirmation lives only in its device session
+    return; // a PIN confirmation lives only in the browser's device session
   }
   try {
     await transport().request("DELETE", `/api/gate/confirmations/${encodeURIComponent(c.id)}`);
@@ -186,13 +184,13 @@ export async function ownerAction<T>(run: (confirmation?: string) => Promise<T>)
     if (c.method !== "pin" || c.hello) allowForeground(); // the OS prompt may open
     useGate.setState({ confirming: c, pinError: null });
     try {
-      if (c.method === "pin" || c.pin) {
+      if (c.method === "pin") {
         const id = c.id;
         const local = !!c.pin;
         const byPin = new Promise<Confirmation>((resolve, reject) => {
           pinWaiter = { id, local, resolve, reject };
         });
-        // At the machine with the OS prompt open too: whichever answers first.
+        // At the machine with Windows Hello open too: whichever answers first.
         c = c.hello ? await Promise.race([byPin, settledElsewhere(c)]) : await byPin;
         if (pinWaiter?.id === id) pinWaiter = null;
       }

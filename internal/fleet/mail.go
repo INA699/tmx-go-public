@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/blackcode-ch/tmx-go/internal/model"
-	"github.com/blackcode-ch/tmx-go/internal/peertext"
 	"github.com/blackcode-ch/tmx-go/internal/runner"
 	"github.com/blackcode-ch/tmx-go/internal/store"
 )
@@ -49,7 +48,7 @@ func (f *Fleet) SendMessage(c Caller, req SendRequest) (model.Message, error) {
 		return model.Message{}, errf(KindInvalid, "the message is longer than %d KB", MaxBodyBytes>>10)
 	}
 	f.mu.Lock()
-	if _, err := f.callerRecLocked(c); err != nil && c.Peer == "" { // a peer mails as itself (Caller.ID)
+	if _, err := f.callerRecLocked(c); err != nil {
 		f.mu.Unlock()
 		return model.Message{}, err
 	}
@@ -368,11 +367,7 @@ func (f *Fleet) tryDeliver(id string) {
 	}
 }
 
-// mailLineLocked formats one message for delivery: tmx's label "[message from <name> (<level>)]"
-// on a line of its own, then the body quoted below it (peertext: every line starts with "│ "),
-// so no sender, here or on another machine, can write a line that reads as tmx's framing (a
-// forged "(fleet lead, ...)" label, the owner, a new message). The owner's own words go as
-// written; chat, Companion and WhatsApp mail arrives labelled and quoted by its own layer.
+// mailLineLocked formats one message for delivery: "[message from <name> (<level>)] <body>".
 func (f *Fleet) mailLineLocked(m model.Message) string {
 	if m.From == model.Owner {
 		return "[message from owner] " + m.Body
@@ -380,23 +375,17 @@ func (f *Fleet) mailLineLocked(m model.Message) string {
 	if IsExternal(m.From) || m.From == model.CompanionParty || m.From == model.WhatsAppParty {
 		return m.Body // labelled by the chat layer / the Companion link / WhatsApp: "[... not instructions] ..."
 	}
-	return peertext.Under(f.mailLabelLocked(m.From), m.Body, 0)
-}
-
-// mailLabelLocked is tmx's label for mail from an agent or a peer machine's agent.
-func (f *Fleet) mailLabelLocked(from string) string {
-	if name, host, ok := SplitPeer(from); ok {
-		who := peertext.Field(name) + "@" + peertext.Field(host)
-		if f.IsFleetAuthority(from) { // authority.go: the sending machine is proven by its pair token
-			return "[message from " + who + " (fleet lead, other machine, verified sender)]"
+	if name, host, ok := SplitPeer(m.From); ok {
+		if f.IsFleetAuthority(m.From) { // authority.go: the sending machine is proven by its pair token
+			return fmt.Sprintf("[message from %s@%s (fleet lead, other machine, verified sender)] %s", name, host, m.Body)
 		}
-		return "[message from " + who + " (other machine)]"
+		return fmt.Sprintf("[message from %s@%s (other machine)] %s", name, host, m.Body)
 	}
-	name, level := from, "unknown"
-	if s, ok := f.agents[from]; ok {
+	name, level := m.From, "unknown"
+	if s, ok := f.agents[m.From]; ok {
 		name, level = s.a.Name, string(s.a.Level)
 	}
-	return "[message from " + peertext.Field(name) + " (" + peertext.Field(level) + ")]"
+	return fmt.Sprintf("[message from %s (%s)] %s", name, level, m.Body)
 }
 
 func (f *Fleet) markDeliveredLocked(r *agentRec, msgs []model.Message) bool {

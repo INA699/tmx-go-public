@@ -6,35 +6,15 @@ import (
 	"testing"
 )
 
-// Bypass mode is the owner's explicit opt-in: config.json "agent_bypass": true runs a Claude
-// agent with tmx's guard hook in bypass mode (the hook alone decides what reaches the owner).
-// Unset or false keeps Claude's own prompts.
-func TestGuardedClaudeAgentsRunInBypassModeOnlyWhenOptedIn(t *testing.T) {
+// The owner, 3 Nov 13:54: no per-tool "allow once" prompts from Claude agents. A Claude agent
+// with tmx's guard hook runs in bypass mode (like the Python fleet), the hook alone decides
+// what reaches the owner; config.json "agent_bypass": false keeps Claude's own prompts.
+func TestGuardedClaudeAgentsRunInBypassMode(t *testing.T) {
 	old := launchGOOS
 	launchGOOS = "linux"
 	t.Cleanup(func() { launchGOOS = old })
 
-	on, off := true, false
-	for _, c := range []struct {
-		name   string
-		bypass *bool
-	}{{"unset", nil}, {"false", &off}} {
-		e := newEnv(t)
-		e.bypass = c.bypass
-		f := e.started()
-		spec := e.chat.Last(mustAgent(t, f, "head").ID).Spec
-		if spec.PermissionMode != "auto" || spec.SettingsPath == "" {
-			t.Fatalf("agent_bypass %s: mode %q, settings %q", c.name, spec.PermissionMode, spec.SettingsPath)
-		}
-		b, _ := os.ReadFile(spec.SettingsPath)
-		var cfg map[string]any
-		if json.Unmarshal(b, &cfg) != nil || cfg["skipDangerousModePermissionPrompt"] != nil || cfg["hooks"] == nil {
-			t.Fatalf("agent_bypass %s: settings %s", c.name, b)
-		}
-	}
-
 	e := newEnv(t)
-	e.bypass = &on
 	f := e.started()
 	f.CreateProject(OwnerCaller, ProjectRequest{Name: "alpha"})
 	for _, name := range []string{"head", "alpha-lead"} {
@@ -50,5 +30,19 @@ func TestGuardedClaudeAgentsRunInBypassModeOnlyWhenOptedIn(t *testing.T) {
 		if json.Unmarshal(b, &cfg) != nil || cfg["skipDangerousModePermissionPrompt"] != true || cfg["hooks"] == nil {
 			t.Fatalf("%s settings: %s", name, b)
 		}
+	}
+
+	off := false
+	e2 := newEnv(t)
+	e2.bypass = &off
+	f2 := e2.started()
+	spec := e2.chat.Last(mustAgent(t, f2, "head").ID).Spec
+	if spec.PermissionMode != "auto" || spec.SettingsPath == "" {
+		t.Fatalf("agent_bypass off: mode %q", spec.PermissionMode)
+	}
+	b, _ := os.ReadFile(spec.SettingsPath)
+	var cfg map[string]any
+	if json.Unmarshal(b, &cfg) != nil || cfg["skipDangerousModePermissionPrompt"] != nil {
+		t.Fatalf("off still skips the prompt: %s", b)
 	}
 }

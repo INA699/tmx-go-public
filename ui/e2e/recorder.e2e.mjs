@@ -34,7 +34,7 @@ test(`recorder: one Record button, screen + camera + mic, ${MINUTES} real minute
     await page.evaluate(() => { location.hash = "/recordings"; });
     await page.getByRole("button", { name: /^Record$/ }).waitFor();
 
-    // ONE Record button on the page
+    // ONE Record button on the page (the owner: "ONE Record button")
     const records = await visibleButtons(page, /^\s*Record\s*$/);
     assert.equal(records.length, 1, `exactly one Record button, got ${JSON.stringify(records)}`);
 

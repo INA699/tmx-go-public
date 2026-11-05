@@ -121,13 +121,11 @@ type Settings struct {
 	RuleStates map[string]Outcome `json:"rule_states,omitempty"`
 	// RuleLog: every switch change, newest last (at most RuleLogMax).
 	RuleLog []RuleChange `json:"rule_log,omitempty"`
-	// DefaultsVersion was written by builds that moved installs to looser rule defaults on first
-	// start. Nothing reads it any more (every rule defaults to its Outcome); it is kept so such a
-	// config.json round-trips unchanged.
+	// DefaultsVersion: the rule defaults this install has applied (and logged); see DefaultsVersion.
 	DefaultsVersion int `json:"defaults_version,omitempty"`
 	// AllowedBefore: held calls (AllowedKey) the owner allowed once, with when. The same call
-	// later still shows a card and waits for the owner's tap; only the PIN is skipped
-	// (Rememberable rules only).
+	// later is allowed without a card, for the Rememberable rules only (the owner, 3 Nov 22:30:
+	// "the same thing never asks twice").
 	AllowedBefore []AllowedEntry `json:"allowed_before,omitempty"`
 }
 
@@ -160,8 +158,10 @@ func AllowedKey(rule, tool, command, cwd, agentKind string) string {
 	return hex.EncodeToString(sum[:16])
 }
 
-// RuleChange is one flip of a rule's switch (By "owner"; older builds also logged By "tmx" when
-// they applied their defaults at an upgrade).
+// DefaultsVersion is the current set of rule defaults (1 = the owner's brief, 3 Nov 22:14).
+const DefaultsVersion = 1
+
+// RuleChange is one flip of a rule's switch (or the defaults applied at an upgrade: By "tmx").
 type RuleChange struct {
 	Rule string  `json:"rule"`
 	Old  Outcome `json:"old"`

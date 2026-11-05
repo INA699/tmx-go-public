@@ -32,7 +32,7 @@ func testHostMain(args []string) int {
 	return 0
 }
 
-// A chat agent (claude stream-json) in a session host. A daemon restart in the
+// Hostb's case: a chat agent (claude stream-json) in a session host. A daemon restart in the
 // middle of a turn, with a permission request waiting: the next daemon reattaches to the same
 // claude, gets the request again as it was asked, answers it, and the turn finishes; nothing
 // claude said is lost or seen twice. Linux and Windows.

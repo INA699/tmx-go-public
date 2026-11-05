@@ -26,7 +26,7 @@ export interface Recording {
   mic: boolean;
   /** the device's own sound was captured with the screen (mixed with the microphone) */
   system_audio?: boolean;
-  /** "clinic": sensitive, the report is written by local models only (lib/sensitive.ts) */
+  /** "clinic": patient data, the report is written by local models only (lib/clinic.ts) */
   sensitivity?: "clinic" | "";
   dir: string;
   segments: RecordingSegment[];

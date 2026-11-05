@@ -1,7 +1,7 @@
 package api
 
-// Fleet operations for the head and the leads (so routine fleet work does not wait for the
-// owner's okay every time): what an order from the fleet's leadership needs, WITHOUT the owner's token. Agents
+// Fleet operations for the head and the leads (the owner, 3 Nov 13:43: too many okays; tmx-lead
+// 13:50): what an order from the fleet's leadership needs, WITHOUT the owner's token. Agents
 // stay blocked from `tmx open` and tmx's state (the token would bypass every gate, including
 // machine protection); instead:
 //

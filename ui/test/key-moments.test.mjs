@@ -28,7 +28,7 @@ test("key moments: the start, every screen change, what was pointed at; 8 s apar
   assert.equal(keyMoments(many).length, MAX_MOMENTS);
 });
 
-test("pointing words, in the supported languages, as whole words", () => {
+test("pointing words, in the owner's languages, as whole words", () => {
   for (const s of ["look", "you can SEE it", "schau mal", "regardez", "voilà", "c'est ici", "ecco", "mira aquí"]) assert.ok(POINTING.test(s), s);
   for (const s of ["lookup table", "seen", "there is a theme", "quiet"]) assert.ok(!POINTING.test(s), s);
 });

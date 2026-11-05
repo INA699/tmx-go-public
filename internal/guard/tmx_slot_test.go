@@ -15,10 +15,10 @@ func TestTmxSlotChecksTheWrappedCommand(t *testing.T) {
 		{"tmx slot -- go test ./internal/fleet", Allow, ""},
 		{"tmx slot --kind cpu -- go build ./...", Allow, ""},
 		{"tmxg slot -- go vet ./...", Allow, ""},
-		{"tmx slot -- sudo true", Hold, RuleElevation},    // the wrapped command is still checked
-		{"tmx slot -- tmx approve k2", Block, RuleTmxCLI}, // also a tmx command inside it
-		{"tmx slot", Block, RuleTmxCLI},                   // no command: not the wrapper form
-		{"tmx approve k2m4", Block, RuleTmxCLI},
+		{"tmx slot -- sudo true", Hold, RuleElevation},   // the wrapped command is still checked
+		{"tmx slot -- tmx approve k2", Hold, RuleTmxCLI}, // also a tmx command inside it
+		{"tmx slot", Hold, RuleTmxCLI},                   // no command: not the wrapper form
+		{"tmx approve k2m4", Hold, RuleTmxCLI},
 		{"tmx status", Allow, ""},
 	} {
 		v := CheckCommand(ctx, ShellPOSIX, tc.cmd)

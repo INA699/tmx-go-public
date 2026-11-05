@@ -203,7 +203,7 @@
   #root {
     height: 100%;
   }
-  /* Readable by default: the UI is sized in rem, so
+  /* Readable by default (the owner, 3 Nov: "everything is too tiny"): the UI is sized in rem, so
      this one root size scales every page. 125% = Normal; Settings > Text size picks Large or
      Larger per device (lib/text-size.ts sets the inline size, which wins over this). */
   html {

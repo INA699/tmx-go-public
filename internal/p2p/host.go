@@ -57,7 +57,7 @@ type Options struct {
 	Name      string         // display name when the state file has none yet
 	Version   string         // shown to other peers as the identify user agent tmx/<version>
 
-	// ListenAddrs replaces the default listeners (QUIC + TCP on every interface, IPv4 and IPv6,
+	// ListenAddrs replaces the default listeners (QUIC + TCP on loopback, IPv4 and IPv6,
 	// on the remembered port). Tests pass loopback addresses.
 	ListenAddrs []string
 	Port        int // fixed port for the default listeners; 0 = remembered, else random
@@ -182,10 +182,10 @@ func (n *Host) listenAddrs(port int) []string {
 	}
 	p := fmt.Sprint(port)
 	return []string{
-		"/ip4/0.0.0.0/udp/" + p + "/quic-v1",
-		"/ip4/0.0.0.0/tcp/" + p,
-		"/ip6/::/udp/" + p + "/quic-v1",
-		"/ip6/::/tcp/" + p,
+		"/ip4/127.0.0.1/udp/" + p + "/quic-v1",
+		"/ip4/127.0.0.1/tcp/" + p,
+		"/ip6/::1/udp/" + p + "/quic-v1",
+		"/ip6/::1/tcp/" + p,
 	}
 }
 
@@ -230,13 +230,13 @@ func (n *Host) start() error {
 		libp2p.ResourceManager(rm),
 		libp2p.ConnectionManager(cm),
 		libp2p.ConnectionGater(connGater{n}), // strangers cannot connect (gater.go)
-		libp2p.EnableRelay(),                 // circuit v2 client: we can use relays, never serve as one
-		libp2p.EnableHolePunching(),
+
 	}
 	if o.NATPortMap {
 		opts = append(opts, libp2p.NATPortMap())
 	}
 	if o.DHT || len(static) > 0 {
+		opts = append(opts, libp2p.EnableRelay(), libp2p.EnableHolePunching())
 		// AutoRelay engages only when AutoNAT finds us unreachable from outside. Candidates:
 		// the static relays, then peers from the DHT routing table that offer relay v2 (most
 		// public IPFS nodes do, with small per-circuit limits).
@@ -279,6 +279,8 @@ func (n *Host) start() error {
 			return ch
 		}
 		opts = append(opts, libp2p.EnableAutoRelayWithPeerSource(src), libp2p.EnableAutoNATv2())
+	} else {
+		opts = append(opts, libp2p.DisableRelay())
 	}
 
 	port := o.Port
@@ -433,15 +435,14 @@ func nowMs() int64 { return time.Now().UnixMilli() }
 // pickPort returns the remembered port if UDP and TCP are both free on it, else a free
 // random one in 20000-59999 (the same for QUIC and TCP, so invites stay short and a router
 // mapping covers both), else 0 (let the OS pick).
-func pickPort(remembered int) int { return pickPortOn("", remembered) }
+func pickPort(remembered int) int { return pickPortOn("127.0.0.1", remembered) }
 
 // pickPortProbeCheck, when non-nil, runs on every socket pickPortOn's probe opens, before it
 // is closed. Tests set this (see TestPickPort) to assert each probe socket is loopback-only;
 // nil in production, so there is no overhead and no behavior change there.
 var pickPortProbeCheck func(net.Addr)
 
-// pickPortOn is pickPort with an injectable probe host: "" probes every interface (the
-// daemon default, since the real listeners bind every interface too); tests pass "127.0.0.1"
+// pickPortOn is pickPort with an injectable probe host: the daemon and tests pass "127.0.0.1"
 // so the probe itself never binds 0.0.0.0 and never triggers a firewall prompt.
 func pickPortOn(host string, remembered int) int {
 	free := func(p int) bool {

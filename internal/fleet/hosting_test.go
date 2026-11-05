@@ -87,8 +87,8 @@ func (h *hostedProc) Detach() bool                { h.once.Do(func() { close(h.s
 
 // A daemon restart leaves a terminal agent running in its session host: Close detaches (no
 // stop, no exit in the timeline), and the next daemon reattaches to the same program, with
-// the credential it was started with, instead of starting it again (a daemon restart must not
-// cut the agents off).
+// the credential it was started with, instead of starting it again (the owner, 4 Nov: restarts
+// cut the agents).
 func TestDaemonRestartKeepsHostedAgentRunning(t *testing.T) {
 	e := newEnv(t)
 	hr := newHostedRunner(e.term)
@@ -186,7 +186,7 @@ func TestDaemonRestartStartsAgentWithoutHost(t *testing.T) {
 	}
 }
 
-// Chat mode (claude stream-json): the same. A codex chat agent is not hosted.
+// Chat mode (Hostb's agents: claude stream-json): the same. A codex chat agent is not hosted.
 func TestDaemonRestartKeepsHostedChatAgentRunning(t *testing.T) {
 	e := newEnv(t)
 	hr := newHostedRunner(e.chat)
@@ -290,7 +290,7 @@ func TestUnsureHostIsNotStartedTwice(t *testing.T) {
 
 // An agent whose host stays unknown is still stoppable by the owner: the stop ends it by the
 // identity its host recorded (host.Stop), never by name; a host that cannot be verified is not
-// killed, and that is said (never an agent the owner cannot stop).
+// killed, and that is said (tmx-lead: never an agent the owner cannot stop for 12 h).
 func TestUnknownHostAgentCanBeStopped(t *testing.T) {
 	old, oldStop := hostRetry, stopHost
 	hostRetry = time.Hour // stays unknown during the test

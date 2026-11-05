@@ -1,4 +1,4 @@
-// Text size (readable by default, larger on request): the whole UI is sized in
+// Text size (the owner, 3 Nov: "everything is too tiny… I have bad eyes"): the whole UI is sized in
 // rem, so one root font-size scales every page. Normal is 125% of the old size (the new default,
 // also in index.css for the first paint); Large and Larger go further. Saved per device.
 export type TextSize = "normal" | "large" | "larger";

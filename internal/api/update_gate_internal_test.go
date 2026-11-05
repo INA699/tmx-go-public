@@ -71,7 +71,7 @@ func TestUpdateKeysRefusedWithoutAProof(t *testing.T) {
 		t.Fatal(err)
 	}
 	saved := false
-	u := update.New(update.Options{Paths: paths, Version: "v0.1.0",
+	u := update.New(update.Options{Paths: paths, Version: "fleet-v0.1.0",
 		Settings: func() config.UpdateConfig { return config.UpdateConfig{} },
 		Save:     func(config.UpdateConfig) error { saved = true; return nil }})
 	body := `{"fleet_keys":[{"id":"k2","type":"ed25519","key":"` + base64.StdEncoding.EncodeToString(make([]byte, 32)) + `"}]}`
@@ -109,7 +109,7 @@ func TestUpdateDrillRefusedWithoutAProof(t *testing.T) {
 	if err := paths.Ensure(); err != nil {
 		t.Fatal(err)
 	}
-	u := update.New(update.Options{Paths: paths, Version: "v0.1.0",
+	u := update.New(update.Options{Paths: paths, Version: "fleet-v0.1.0",
 		Settings: func() config.UpdateConfig { return config.UpdateConfig{} }})
 	put := func(s *Server, c fleet.Caller) *httptest.ResponseRecorder {
 		req := httptest.NewRequest("PUT", "/api/update/drill", strings.NewReader(`{"arm":true}`))

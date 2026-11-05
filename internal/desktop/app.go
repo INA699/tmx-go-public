@@ -61,7 +61,7 @@ func Run(opts Options) error {
 		bg = &options.RGBA{R: 23, G: 23, B: 23, A: 255} // --background (dark), oklch(0.172 0 0)
 	}
 	return wails.Run(&options.App{
-		Title:            "Tiamatrix",
+		Title:            "tmx",
 		Width:            1380,
 		Height:           880,
 		MinWidth:         1100,
@@ -74,7 +74,7 @@ func Run(opts Options) error {
 		Mac: &mac.Options{
 			TitleBar:   mac.TitleBarHiddenInset(),
 			Appearance: mac.DefaultAppearance, // follows the system
-			About:      &mac.AboutInfo{Title: "Tiamatrix", Message: "Runs a tree of coding agents on this machine."},
+			About:      &mac.AboutInfo{Title: "tmx", Message: "Runs a tree of coding agents on this machine."},
 		},
 		Windows: &windows.Options{Theme: windows.SystemDefault},
 	})

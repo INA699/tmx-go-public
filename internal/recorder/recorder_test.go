@@ -417,7 +417,7 @@ func (f *fakeTranscriber) Enqueue(source, wav, lang string) error {
 func (f *fakeTranscriber) AutoTranscribe() bool { return f.auto }
 
 // A part is transcribed as soon as the window moves on to the next one, not only after Stop
-// (short parts, so the report is ready minutes after Stop).
+// (the owner: "chunks of 5 min"; the report is ready minutes after Stop).
 func TestClosedSegmentTranscribedWhileRecording(t *testing.T) {
 	r := newRig(t)
 	ft := &fakeTranscriber{auto: true}
@@ -589,7 +589,7 @@ func TestFinishedHook(t *testing.T) {
 	}
 }
 
-// No time limit: with max_minutes unset a recording goes on for a day and more, heartbeats and
+// The owner, 2 Nov: "no time limit" - with max_minutes unset a recording goes on for a day and more, heartbeats and
 // chunks alike; only the owner's Stop (or a full disk) ends it.
 func TestNoTimeLimitByDefault(t *testing.T) {
 	r := newRig(t)

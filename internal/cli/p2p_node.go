@@ -26,7 +26,7 @@ func startP2P(paths config.Paths, cfg config.Config, log *slog.Logger) *p2p.Host
 	}
 	o := p2p.Options{
 		Key: key, StateFile: paths.P2PStateFile(), Name: defaultDisplayName(cfg), Version: config.Version,
-		DHT: cfg.EffectiveDHT(), MDNS: cfg.EffectiveMDNS(), NATPortMap: cfg.EffectiveNATPortMap(), Logger: log,
+		DHT: cfg.EffectiveDHT(), MDNS: pc.MDNSOn(), NATPortMap: pc.NATPortMapOn(), Logger: log,
 	}
 	if pc != nil {
 		o.Port, o.Relays, o.Bootstrap, o.AllowLoopback, o.ListenAddrs = pc.Port, pc.Relays, pc.Bootstrap, pc.Loopback, pc.ListenAddrs

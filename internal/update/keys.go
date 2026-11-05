@@ -6,21 +6,11 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/config"
 )
 
-// releaseKeys are the owner's Ed25519 release keys (base64, 32 bytes): a release whose
-// SHA256SUMS.sig is their signature of SHA256SUMS (sign.go, the original format) installs. CI
-// signs every v* release with the private key, the GitHub secret TMX_RELEASE_SIGNING_KEY
-// (scripts/release-sums.sh). `make release-key` makes a new key pair, stores the private key as
-// that secret and adds the public key here. Keep the old key listed until every install has a
-// release that knows the new one. Empty = this build installs no updates.
-var releaseKeys = []string{
-	"8aFwoLBhKp5XN9ovjPIsR3iDzsjSx0iyY/3o1kIQ0Dc=", // 2026-10-27
-	// release-key: new keys go above this line
-}
-
-// FleetKeyID is the id of the first extra key (and of the legacy update.fleet_public_key).
+// FleetKeyID is the id of the first fleet key (and of the legacy update.fleet_public_key). Fleet
+// private key material is provisioned separately; this repository deliberately ships no trusted key.
 const FleetKeyID = config.LegacyFleetKeyID
 
-// FleetSignatureContext separates extra-key signatures from signatures of raw sums.
+// FleetSignatureContext separates fleet signatures from signatures of raw sums.
 // The purpose, repository, and tag each precede SHA256SUMS as an LF-terminated line.
 const FleetSignatureContext = "tmx-fleet-release-v1"
 
@@ -34,13 +24,16 @@ const (
 	FleetExtraWebAuthnContext = "tmx-fleet-extra-v2"
 )
 
-// trustedKeys is what an install trusts: the owner's release keys (Options.Keys, by default
-// releaseKeys) and the extra keys the owner pinned in config.json (update.fleet_keys, with
-// update.require; none by default). An invalid pinned set turns updates off (fail closed).
+// trustedKeys reads the pinned key set from local configuration. Options.Keys (base64 Ed25519
+// keys under FleetKeyID, require ["ed25519"]) is an explicit dependency injection seam for
+// tests, never an upstream fallback.
 func (u *Updater) trustedKeys() (keySet, error) {
-	owner, err := publicKeys(u.o.Keys)
-	if err != nil {
-		return keySet{}, fmt.Errorf("update keys invalid: %w", err)
+	if u.o.Keys != nil {
+		var ks []config.FleetKey
+		for _, k := range u.o.Keys {
+			ks = append(ks, config.FleetKey{ID: FleetKeyID, Type: config.KeyEd25519, Key: k})
+		}
+		return newKeySet(ks, []string{config.KeyEd25519})
 	}
 	s := u.settings()
 	keys, require, err := s.PinnedKeys()
@@ -51,6 +44,5 @@ func (u *Updater) trustedKeys() (keySet, error) {
 	if err != nil {
 		return keySet{}, fmt.Errorf("update keys invalid: %w", err)
 	}
-	ks.release = owner
 	return ks, nil
 }

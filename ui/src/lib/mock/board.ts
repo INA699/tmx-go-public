@@ -66,13 +66,13 @@ function summarize(turn: TimelineEntry[]): BoardCard {
       case "tool_use": {
         c.tools++;
         const inp = (e.input ?? {}) as Record<string, string>;
-        if (e.tool === "mcp__tmx__send") {
+        if (e.tool === "mcp__tmxg__send") {
           if (inp.to === "owner") add("notes", clip(inp.body, 300), false);
           else if (inp.to) add("sent_to", inp.to);
-        } else if (e.tool === "mcp__tmx__report") add("notes", clip(inp.body, 300), false);
-        else if (e.tool === "mcp__tmx__agent_launch" && inp.name) add("launched", inp.name);
-        else if (e.tool === "mcp__tmx__project_create" && inp.name) add("projects", inp.name);
-        else if (e.tool === "mcp__tmx__ask_owner" && inp.question) add("asked", clip(inp.question, 300), false);
+        } else if (e.tool === "mcp__tmxg__report") add("notes", clip(inp.body, 300), false);
+        else if (e.tool === "mcp__tmxg__agent_launch" && inp.name) add("launched", inp.name);
+        else if (e.tool === "mcp__tmxg__project_create" && inp.name) add("projects", inp.name);
+        else if (e.tool === "mcp__tmxg__ask_owner" && inp.question) add("asked", clip(inp.question, 300), false);
         break;
       }
       case "result":

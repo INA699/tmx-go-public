@@ -22,15 +22,15 @@ import (
 // + X-TMX-From), never the owner's bearer token. The guard's network rule applies first: a peer
 // arrives over the tailnet through tailscale serve (a trusted https host), or from this machine.
 //
-// A peer also reaches a few ordinary /api/ routes (peerOps: launch, start, stop, restart,
-// interrupt and resume agents, read a screen, type and press keys the way a head agent does,
-// send mail) as fleet.PeerCaller - its own identity, "fleet:<name>@<host>", never the owner.
-// Every other route answers 403 to a peer before its handler runs, and the fleet refuses a peer
-// caller for every action that does not let it in explicitly (fleet.Caller.Peer). Only the
-// Python-shaped protocol paths below keep their own dedicated handlers.
+// A trusted ("full" role) peer also reaches the ordinary /api/ routes, same standing as the
+// owner there (Python's auth(): a pair-token caller is one shared "peer" role, checked by each
+// route like any other caller, never a separate allowlist) - so an architect or lead on another
+// machine can launch/screen/type/keys/restart agents here. servePeer sets that caller and falls
+// through to the same mux as everyone else; only the Python-shaped protocol paths below keep
+// their own dedicated handlers.
 
 // peerProtocolPaths are the Python-wire-shaped routes: their own handlers, Python's reply shape.
-var peerProtocolPaths = map[string]bool{"/api/sessions": true, "/api/messages/incoming": true, "/api/peers/pair-token": true, "/api/peer/summarize-local": true}
+var peerProtocolPaths = map[string]bool{"/api/sessions": true, "/api/messages/incoming": true, "/api/peers/pair-token": true, "/api/gate/pin/record": true, "/api/peer/summarize-local": true}
 
 var wireIDRx = regexp.MustCompile(`^[0-9a-f]{12,32}$`)
 
@@ -61,18 +61,22 @@ func (s *Server) peerProtocolRoutes() http.Handler {
 	mux.HandleFunc("GET /api/sessions", s.peerSessions)
 	mux.HandleFunc("POST /api/messages/incoming", s.peerIncoming)
 	mux.HandleFunc("POST /api/peers/pair-token", s.peerPairToken)
+	mux.HandleFunc("GET /api/gate/pin/record", s.peerPinRecord)            // ownerpin.go
+	mux.HandleFunc("POST /api/gate/pin/record", s.peerPinAdopt)            // ownerpin.go
 	mux.HandleFunc("POST /api/peer/summarize-local", s.peerSummarizeLocal) // summaries.go
 	return mux
 }
 
 // servePeer authenticates a peer machine and serves its routes: the Python-protocol paths
-// through their own handlers, the peerOps routes through next (the ordinary app mux) as a
-// fleet.PeerCaller, and nothing else (403; a route that doesn't exist still answers 404). A
-// browser never gets here (no Origin). On-behalf identifies whom the peer is acting for on its
-// OWN machine (its daemon, its operator, or one of its own agents - "agent:<name>[@<host>]"):
-// an agent's name becomes the caller's mail name ("<name>@<peer>", as the peer could already
-// say through /api/messages/incoming); anything else is the machine itself ("daemon@<peer>").
-// It never makes the caller the owner.
+// through their own handlers, everything else through next (the ordinary app mux) carrying a
+// peer-flavored fleet.Caller, same standing as the owner there (Python's single "peer" role;
+// see the package doc above). A browser never gets here (no Origin). On-behalf identifies
+// whom the peer is acting for on its OWN machine (its daemon, its operator, or one of its own
+// agents - "agent:<name>") - it is never read as a request to relay/impersonate on THIS
+// machine; the caller here is always, only, fleet.PeerCaller(from), whatever on-behalf says
+// (tmx-lead, 3 Nov: a P1 regression - Hosta's real traffic sends on-behalf daemon, operator
+// AND agent:<name> for ordinary relayed reads like /api/health, /api/sessions, relay-invites
+// polling; refusing agent:<name> broke all of them).
 func (s *Server) servePeer(w http.ResponseWriter, r *http.Request, next http.Handler) {
 	if s.peers == nil {
 		writeError(w, http.StatusNotFound, "this daemon has no fleet peers (production profile, config.json \"peers\")")
@@ -105,10 +109,12 @@ func (s *Server) servePeer(w http.ResponseWriter, r *http.Request, next http.Han
 	}
 	// On-behalf is informational for ordinary reads and agent-operation routes (any value ->
 	// PeerCaller, logged at debug when it names neither daemon, operator nor one of this
-	// peer's own parties). Owner material - the pair-token rotation - is different: that route
-	// accepts only the machine itself (no on-behalf, or "daemon"), never a relayed agent,
-	// device or operator. (The owner PIN record never leaves the machine at all: no peer route
-	// reads or writes it.)
+	// peer's own parties). Owner material - the PIN sync record (GET reveals the scrypt hash,
+	// POST pushes a new one) and the pair-token rotation - is different: those routes accept
+	// only the machine itself (no on-behalf, or "daemon"), never a relayed agent, device or
+	// operator, however that peer authenticated (go-reviewer-o/tmx-lead, 3 Nov: a relayed
+	// agent or device must never read or push the owner's PIN record, or rotate the pair
+	// token, through another machine's daemon).
 	ob := strings.ToLower(strings.TrimSpace(r.Header.Get(peers.HeaderOnBehalf)))
 	if ownerMaterialRoute(r) && ob != "" && ob != "daemon" {
 		writeError(w, http.StatusForbidden, "this route is the peer machine's own: never a relayed agent, device or operator")
@@ -122,65 +128,22 @@ func (s *Server) servePeer(w http.ResponseWriter, r *http.Request, next http.Han
 		s.peerMux.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), peerCtxKey{}, c)))
 		return
 	}
-	mux, _ := next.(*http.ServeMux)
-	if mux == nil {
-		writeError(w, http.StatusForbidden, "another machine of the fleet can't use this route")
-		return
-	}
-	if _, pattern := mux.Handler(r); !peerOps[pattern] && pattern != "/api/" { // "/api/": no such route, 404
-		writeError(w, http.StatusForbidden, "another machine of the fleet can't use this route")
-		return
-	}
-	c := fleet.PeerCallerAs(from, onBehalfAgent(ob, from))
-	next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, c)))
+	next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, fleet.PeerCaller(from))))
 }
 
-// peerOps are the ordinary routes (by their mux pattern) a peer machine may call: operating
-// agents the way a head agent can, and mail. The fleet checks each call again (a peer never
-// reaches a shell, launches only what the head may, inside the workspace; its text and mail
-// are labelled as the other machine's). Owner-only routes - gate, PIN, safety and guard,
-// update settings and keys, devices and pairing, config, policy, profiles' changes, accounts,
-// WhatsApp, Companion, p2p, chats, projects, the Matrix and board, the mailbox, timelines, raw
-// terminals, events - are not here.
-var peerOps = map[string]bool{
-	"GET /api/health":                 true,
-	"GET /api/harnesses":              true,
-	"GET /api/profiles":               true,
-	"POST /api/agents":                true,
-	"GET /api/agents/{id}":            true,
-	"POST /api/agents/{id}/start":     true,
-	"POST /api/agents/{id}/stop":      true,
-	"POST /api/agents/{id}/restart":   true,
-	"POST /api/agents/{id}/interrupt": true,
-	"POST /api/agents/{id}/resume":    true,
-	"GET /api/agents/{id}/screen":     true,
-	"POST /api/agents/{id}/type":      true,
-	"POST /api/agents/{id}/keys":      true,
-	"POST /api/messages":              true,
-}
-
-// onBehalfAgent is the agent name in an on-behalf header "agent:<name>[@<host>]" of the peer
-// host ("" for anything else: the machine itself).
-func onBehalfAgent(ob, host string) string {
-	name, ok := strings.CutPrefix(ob, "agent:")
-	if !ok {
-		return ""
-	}
-	if n, h, found := strings.Cut(name, "@"); found {
-		if h != host {
-			return ""
-		}
-		name = n
-	}
-	return name
-}
-
-// ownerMaterialRoute reports whether r writes owner-controlled material (the pair token
-// itself) over the peer protocol: the one class of peer route where on-behalf does NOT pass
-// through as an ordinary relayed call (see servePeer) - accepted only from the machine itself,
-// never a relayed agent, device or operator.
+// ownerMaterialRoute reports whether r reads or writes owner-controlled material (the PIN
+// record's scrypt hash, or the pair token itself) over the peer protocol: the one class of
+// peer route where on-behalf does NOT pass through as an ordinary relayed call (see
+// servePeer) - accepted only from the machine itself, never a relayed agent, device or
+// operator.
 func ownerMaterialRoute(r *http.Request) bool {
-	return r.Method == http.MethodPost && r.URL.Path == "/api/peers/pair-token"
+	switch {
+	case r.URL.Path == "/api/gate/pin/record": // GET reveals the scrypt hash; POST pushes one
+		return true
+	case r.Method == http.MethodPost && r.URL.Path == "/api/peers/pair-token":
+		return true
+	}
+	return false
 }
 
 // pythonState maps an agent state to the Python daemon's detector states where they differ.

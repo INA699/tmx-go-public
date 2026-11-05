@@ -444,7 +444,7 @@ function Body({ m }: { m: WaMessage }) {
             <MessageCircleQuestion className="mt-0.5 size-3.5 shrink-0" />
             <span>
               {m.text ? <span className="text-foreground/80">{m.text} · </span> : null}
-              Tiamatrix can't show this kind of message yet. Your phone can.
+              tmx can't show this kind of message yet. Your phone can.
             </span>
           </span>
         );

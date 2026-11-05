@@ -33,7 +33,7 @@ export function dictationSupported(): boolean {
 function micError(e: unknown): DictationError {
   const name = (e as { name?: string })?.name ?? "";
   if (name === "NotAllowedError" || name === "SecurityError")
-    return new DictationError("Tiamatrix may not use the microphone. Allow it in the system's privacy settings (Microphone), then try again.");
+    return new DictationError("tmx may not use the microphone. Allow it in the system's privacy settings (Microphone), then try again.");
   if (name === "NotFoundError" || name === "OverconstrainedError") return new DictationError("No microphone was found.");
   if (name === "NotReadableError") return new DictationError("The microphone is busy in another app.");
   return new DictationError((e as Error)?.message || "The microphone could not be started.");

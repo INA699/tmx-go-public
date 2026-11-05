@@ -7,7 +7,7 @@ import { api, dropApproval } from "@/lib/api";
 import { cardAnswerKey, clearCardAnswer, saveCardAnswer, useCardAnswers } from "@/lib/card-answers";
 import { PAUSE_LABEL } from "@/lib/resources";
 import { useStore } from "@/lib/store";
-import { summarizeTool, tmxTool } from "@/lib/tools";
+import { summarizeTool } from "@/lib/tools";
 import type { Agent, Approval, DecideBody } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ToolInputView } from "./conversation/tool-input";
@@ -16,6 +16,7 @@ import { Kbd } from "@/components/ui/kbd";
 import { useGateAsks } from "@/lib/owner-gate";
 import { GuardHoldBody, guardOf } from "./guard";
 import { harnessLabel, terminalMenuHeadline, terminalMenuOf } from "@/lib/harness";
+import { ownerName } from "@/lib/owner-name";
 import { href, paths } from "@/lib/router";
 import { CompanionApprovalBody, companionEffects, isCompanionMessage, isCompanionQuestion, isCompanionSend, isCompanionTask } from "./companion/approval";
 
@@ -27,9 +28,9 @@ export function approvalHeadline(a: Approval): string {
   if (isCompanionTask(a)) return "wants to hand Companion a task";
   if (isCompanionMessage(a)) return "wants to send Companion a message";
   if (isCompanionQuestion(a)) return "has a question from Companion";
-  if (a.kind === "brake") return "was paused by Tiamatrix";
+  if (a.kind === "brake") return "was paused by tmx";
   if (a.kind === "guard") return "needs your OK";
-  if (a.kind === "whatsapp" || tmxTool(a.tool) === "whatsapp_send") return "wants to send a WhatsApp message";
+  if (a.kind === "whatsapp" || a.tool === "mcp__tmxg__whatsapp_send") return "wants to send a WhatsApp message";
   switch (a.tool) {
     case "Bash":
       return "wants to run a command";
@@ -150,7 +151,7 @@ export function ApprovalBody({ a, agent, compact }: { a: Approval; agent?: Agent
           <a className="hover:underline" href={href(paths.project(a.card.project_id))}>{project?.name || a.card.project_id}</a>
           {a.card.urgent && <span className="ml-2 font-medium">Urgent</span>}
           {!!a.card.priority && <span className="ml-2">Priority {a.card.priority}</span>}
-          {a.card.owner_only && <span className="ml-2">Your call</span>}
+          {a.card.owner_only && <span className="ml-2">{ownerName}'s own call</span>}
           {a.card.batchable && <span className="ml-2">Can wait for a batch</span>}
         </p>}
         {a.card?.close_reason && <p className="text-sm">Closed: {a.card.close_reason}</p>}

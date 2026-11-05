@@ -48,7 +48,7 @@ func TestUpdateCommandsThroughTheGate(t *testing.T) {
 		t.Fatalf("auto on: %d %q %q", code, out, errs)
 	}
 	out, errs, code = tmx(t, "update", "channel", "latest")
-	if code != 0 || !strings.Contains(out, "channel latest") || !strings.Contains(errs, "tmx is trying to take updates from releases including prereleases.") {
+	if code != 0 || !strings.Contains(out, "channel latest") || !strings.Contains(errs, "tmx is trying to take updates from fleet releases including prereleases.") {
 		t.Fatalf("channel: %d %q %q", code, out, errs)
 	}
 	out, errs, code = tmx(t, "update", "token", secret)
@@ -89,8 +89,7 @@ func TestUpdateCommandsThroughTheGate(t *testing.T) {
 	}
 }
 
-// tmx update keys: shows the built-in and pinned keys by fingerprint; pin replaces the pinned ones
-// and clear drops them, through the owner's
+// tmx update keys: shows the pinned keys by fingerprint; pin replaces them through the owner's
 // confirmation (always asked); bad arguments are a usage error. tmx update install needs a tag.
 func TestUpdateKeysCommand(t *testing.T) {
 	d := apitest.New(t)
@@ -102,21 +101,15 @@ func TestUpdateKeysCommand(t *testing.T) {
 	h := sha256.Sum256(pub)
 	fp := hex.EncodeToString(h[:])[:12]
 
-	if out, errs, code := tmx(t, "update", "keys"); code != 0 || !strings.Contains(out, "trusted release keys, built in:\n  release  ed25519  507f6209f615") {
+	if out, errs, code := tmx(t, "update", "keys"); code != 0 || !strings.Contains(out, "trusted release keys") {
 		t.Fatalf("show: %d %q %q", code, out, errs)
 	}
 	out, errs, code := tmx(t, "update", "keys", "pin", "k2:"+key)
-	if code != 0 || !strings.Contains(out, "k2  ed25519  "+fp) || !strings.Contains(errs, "replace the extra keys updates are trusted with (besides the built-in release key): pin k2 "+fp) {
+	if code != 0 || !strings.Contains(out, "k2  ed25519  "+fp) || !strings.Contains(errs, "replace the keys updates are trusted with: pin k2 "+fp) {
 		t.Fatalf("pin: %d %q %q", code, out, errs)
 	}
 	if ks := d.UpdateSettings().FleetKeys; len(ks) != 1 || ks[0].ID != "k2" || ks[0].Key != key {
 		t.Fatalf("not pinned: %+v", ks)
-	}
-	if out, errs, code := tmx(t, "update", "keys", "clear"); code != 0 || !strings.Contains(out, "pinned on this machine (require ed25519, rotation serial 0):\n  none") || !strings.Contains(errs, "pin none, drop k2 "+fp) {
-		t.Fatalf("clear: %d %q %q", code, out, errs)
-	}
-	if ks := d.UpdateSettings().FleetKeys; len(ks) != 0 {
-		t.Fatalf("not cleared: %+v", ks)
 	}
 	for _, args := range [][]string{{"update", "keys", "pin"}, {"update", "keys", "pin", "nocolon"}, {"update", "keys", "nope"}, {"update", "install"}, {"update", "auto", "maybe"}} {
 		if _, _, code := tmx(t, args...); code == 0 {

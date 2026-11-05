@@ -702,10 +702,8 @@ func (f *Fleet) ProjectArtifacts(c Caller, project string) (model.ProjectArtifac
 	return out, nil
 }
 
-// feedbackRouteLocked picks who gets the owner's feedback on a project: the named lead (by
-// default the project's lead), else the project's only live lead, else the machine's head. It
-// deliberately makes no arbitrary choice among several leads. The head also gets a copy
-// whatever the route (prepareProjectFeedbackLocked).
+// feedbackRouteLocked deliberately makes no arbitrary choice among several leads.
+// This local slice uses the head as Python's supervisor copy.
 func (f *Fleet) feedbackRouteLocked(p *model.Project, sec model.ProjectSection) model.FeedbackRoute {
 	named := sec.Lead
 	if named == "" {
@@ -739,11 +737,11 @@ func (f *Fleet) feedbackRouteLocked(p *model.Project, sec model.ProjectSection) 
 	if len(leads) > 1 {
 		route.Why += "; several live project leads, choose one"
 	}
-	if h := f.headLocked(); h != nil && h.a.ID != rejected && feedbackLive(h) {
-		route.To, route.How = h.a.ID, "head"
+	if r, _ := f.resolveLocked("tmx-lead"); r != nil && r.a.ID != rejected && feedbackLive(r) {
+		route.To, route.How = r.a.ID, "tmx-lead"
 	}
 	if route.To == "" {
-		route.Why += "; no live lead or head"
+		route.Why += "; no live lead or tmx-lead; supervisor copy only"
 	}
 	return route
 }

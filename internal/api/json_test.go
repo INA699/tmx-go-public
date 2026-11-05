@@ -7,8 +7,9 @@ import (
 )
 
 // A large JSON reply must carry Content-Length and never fall back to Transfer-Encoding:
-// chunked, which Python's HTTP client cannot read (a GET /api/sessions answer with enough
-// agents went chunked, and the Python peers saw the daemon as agent-less). json.NewEncoder(w).Encode(v) streams and leaves net/http to decide; writeJSON
+// chunked, which Python's HTTP client cannot read (found 4 Nov: Hostb's GET /api/sessions
+// answer, once it had enough agents, went chunked and Hosta/Hostc saw Hostb as
+// agent-less). json.NewEncoder(w).Encode(v) streams and leaves net/http to decide; writeJSON
 // must marshal first instead. A real net/http round trip is required here - httptest.
 // NewRecorder never chunks, so it cannot catch this.
 func TestWriteJSONNeverChunks(t *testing.T) {

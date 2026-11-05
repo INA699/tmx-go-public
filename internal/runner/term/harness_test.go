@@ -249,7 +249,7 @@ func TestHarnessCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	args := strings.Join(c.Args, " ")
-	for _, want := range []string{"--no-daemon", "-m gpt-6", "mcp_servers.tmx.command=\"/x/tmx\"", `mcp_servers.tmx.env_vars=["TMXG_AGENT_TOKEN"]`, "[tmx launch binding: " + c.LaunchID + "]"} {
+	for _, want := range []string{"--no-daemon", "-m gpt-6", "mcp_servers.tmxg.command=\"/x/tmx\"", `mcp_servers.tmxg.env_vars=["TMXG_AGENT_TOKEN"]`, "[tmx launch binding: " + c.LaunchID + "]"} {
 		if !strings.Contains(args, want) {
 			t.Errorf("codex args miss %q: %s", want, args)
 		}

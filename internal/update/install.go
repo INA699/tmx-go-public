@@ -27,20 +27,18 @@ import (
 //     the release it claims to be. Nothing in use changes; a failure leaves the install as it was.
 //   - swap: put the staged copy in place with renames. Unix: rename over the executable (running
 //     processes keep the old file). Windows: a running .exe cannot be replaced but can be renamed,
-//     so the old one moves aside first. A bundle: the old tmx.app moves aside, the new one takes
+//     so the old one moves aside first. A bundle: the old tmxg.app moves aside, the new one takes
 //     its name. If the second rename fails the first is undone.
 //
-// What moved aside (".tmx.app.old-*", "tmx.exe.old-*") and leftovers of an interrupted stage
-// (".tmx-update-*") are removed at the next start (cleanup); a Windows .exe still running then
+// What moved aside (".tmxg.app.old-*", "tmx.exe.old-*") and leftovers of an interrupted stage
+// (".tmxg-update-*") are removed at the next start (cleanup); a Windows .exe still running then
 // stays until a later start.
 
 const (
 	maxAsset    = 300 << 20
 	maxSums     = 64 << 10
 	maxSig      = 16 << 10
-	stagePrefix = ".tmx-update-"
-	// legacyStagePrefix: interrupted stages of builds named tmxg, removed at cleanup too.
-	legacyStagePrefix = ".tmxg-update-"
+	stagePrefix = ".tmxg-update-"
 )
 
 // staged is a downloaded, verified release ready to swap in.
@@ -56,7 +54,7 @@ func (u *Updater) stage(ctx context.Context, t target, r release, version string
 		return staged{}, err
 	}
 	if r.TagName != version {
-		return staged{}, errors.New("release tag/version mismatch")
+		return staged{}, errors.New("fleet release tag/version mismatch")
 	}
 	// No downgrade, checked here too and not only where the release was chosen.
 	if cur, ok := ParseVersion(u.o.Version); !ok || !cur.Less(rv) {
@@ -155,7 +153,7 @@ func (u *Updater) stage(ctx context.Context, t target, r release, version string
 func (u *Updater) check(ctx context.Context, t target, s staged) error {
 	if t.bundle && u.o.VerifyBundle != nil {
 		if err := u.o.VerifyBundle(ctx, s.path); err != nil {
-			return fmt.Errorf("the new tmx.app fails its signature check: %w", err)
+			return fmt.Errorf("the new tmxg.app fails its signature check: %w", err)
 		}
 	}
 	out, err := u.o.Probe(ctx, t.executable(s.path))
@@ -192,7 +190,7 @@ func codesignVerify(ctx context.Context, bundle string) error {
 	return nil
 }
 
-// unzipBundle unpacks a zipped tmx.app (ditto -c -k --keepParent) into dir and returns the .app.
+// unzipBundle unpacks a zipped tmxg.app (ditto -c -k --keepParent) into dir and returns the .app.
 func unzipBundle(zipPath, dir string) (string, error) {
 	zr, err := zip.OpenReader(zipPath)
 	if err != nil {
@@ -291,15 +289,15 @@ func swap(t target, s staged) (string, error) {
 func swapWithOps(t target, s staged, now time.Time, rename func(string, string) error, removeAll func(string) error) (string, error) {
 	stamp := fmt.Sprintf("%d", now.Unix())
 	if t.bundle {
-		old := filepath.Join(filepath.Dir(t.path), ".tmx.app.old-"+stamp)
+		old := filepath.Join(filepath.Dir(t.path), ".tmxg.app.old-"+stamp)
 		if err := rename(t.path, old); err != nil {
-			return "", fmt.Errorf("cannot move the old tmx.app aside: %w", err)
+			return "", fmt.Errorf("cannot move the old tmxg.app aside: %w", err)
 		}
 		if err := rename(s.path, t.path); err != nil {
 			if rerr := rename(old, t.path); rerr != nil {
-				return "", fmt.Errorf("cannot put the new tmx.app in place (%v), nor the old one back (%v): it is at %s", err, rerr, old)
+				return "", fmt.Errorf("cannot put the new tmxg.app in place (%v), nor the old one back (%v): it is at %s", err, rerr, old)
 			}
-			return "", fmt.Errorf("cannot put the new tmx.app in place: %w", err)
+			return "", fmt.Errorf("cannot put the new tmxg.app in place: %w", err)
 		}
 		removeAll(s.cleanup) // the staging directory, now empty
 		return t.executable(t.path), nil
@@ -326,10 +324,9 @@ func swapWithOps(t target, s staged, now time.Time, rename func(string, string) 
 // cleanup removes what earlier updates left next to the install.
 func cleanup(t target) {
 	dir := filepath.Dir(t.path)
-	pats := []string{filepath.Join(dir, stagePrefix+"*"), filepath.Join(dir, legacyStagePrefix+"*")}
+	pats := []string{filepath.Join(dir, stagePrefix+"*")}
 	if t.bundle {
-		// .tmxg.app.old-*: left by builds named tmxg.
-		pats = append(pats, filepath.Join(dir, ".tmx.app.old-*"), filepath.Join(dir, ".tmxg.app.old-*"))
+		pats = append(pats, filepath.Join(dir, ".tmxg.app.old-*"))
 	} else {
 		pats = append(pats, t.path+".old-*")
 	}

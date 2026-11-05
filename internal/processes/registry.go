@@ -34,7 +34,6 @@ type entry struct {
 	stopping bool
 	detached bool // Detach: it runs on in its host; its end here is not an exit
 	unknown  bool // adopted, but its host could not be checked (hosted.go)
-	starting bool // reserved by Start, its program not yet published: not listed
 	identity int64
 }
 
@@ -49,119 +48,59 @@ type Registry struct {
 
 func New() *Registry { return &Registry{entries: make(map[string]*entry)} }
 
-// Start reserves the tool's entry, starts its program without holding mu (a hosted tool's host
-// takes seconds to come up, and List, Stop and every other start must not wait for it), then
-// publishes it. A stop or Detach that came meanwhile acts on it once it is published.
+// Start records the child before publishing it; all starts and ownership changes serialize.
 func (r *Registry) Start(s Spec) (model.ProcessInfo, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return model.ProcessInfo{}, errors.New("process registry closed")
+	}
 	if s.OwnerID == "" || s.Purpose == "" || s.Command == "" {
 		return model.ProcessInfo{}, errors.New("owner, purpose and command are required")
 	}
 	s.Args = append([]string(nil), s.Args...)
-	e := &entry{spec: s, done: make(chan struct{}), cancel: make(chan struct{}), starting: true}
+	e := &entry{spec: s, done: make(chan struct{}), cancel: make(chan struct{})}
 	e.info = model.ProcessInfo{ID: model.NewID(), Category: model.CategoryAgentTool, OwnerID: s.OwnerID, ProjectID: s.ProjectID, Purpose: s.Purpose, Command: filepath.Base(s.Command)}
 	e.info.CreatorID = s.OwnerID
 	if s.System {
 		e.info.Category = model.CategorySystemTool
 	}
-	r.mu.Lock()
-	if r.closed {
-		r.mu.Unlock()
-		return model.ProcessInfo{}, errors.New("process registry closed")
-	}
-	how := r.howToStart(e)
-	r.entries[e.info.ID] = e // reserved: not listed while it starts
-	r.mu.Unlock()
-
-	l, err := how.launch()
-
-	r.mu.Lock()
-	e.starting = false
+	err := r.spawn(e)
 	if err != nil && !s.System {
-		delete(r.entries, e.info.ID)
-		r.mu.Unlock()
-		close(e.done) // releases a stop that came while it started
 		return model.ProcessInfo{}, err
 	}
-	r.publish(e, l, err)
-	info, stopped := e.info, e.stopping
-	r.mu.Unlock()
+	r.entries[e.info.ID] = e
 	go r.supervise(e)
-	if stopped {
-		return model.ProcessInfo{}, errors.New("the tool was stopped while it started")
-	}
-	return info, nil
+	return e.info, nil
 }
 
-// startPlan is what launch needs, copied under mu: launch itself runs without it.
-type startPlan struct {
-	spec    Spec
-	hostExe string // "" = the daemon's own child
-	toolDir string // a hosted tool's folder
-}
-
-// launched is a started program, not yet published to its entry.
-type launched struct {
-	cmd      *exec.Cmd
-	identity int64
-	conn     *host.Conn
-}
-
-// howToStart plans e's next start. Called with r.mu held.
-func (r *Registry) howToStart(e *entry) startPlan {
-	p := startPlan{spec: e.spec}
+// spawn and fields of entry are guarded by mu; Wait alone owns cmd.Wait.
+func (r *Registry) spawn(e *entry) error {
 	if r.hosted(e) {
-		p.hostExe, p.toolDir = r.hostExe, r.toolDir(e.info.ID)
-		e.dir = filepath.Join(p.toolDir, "host")
+		return r.spawnHosted(e) // hosted.go
 	}
-	return p
-}
-
-// launch starts the program. Called without r.mu.
-func (p startPlan) launch() (launched, error) {
-	if p.hostExe != "" {
-		c, err := launchHosted(p) // hosted.go
-		return launched{conn: c}, err
-	}
-	cmd := hiddenexec.Command(p.spec.Command, p.spec.Args...)
-	cmd.Dir = p.spec.Cwd
+	cmd := hiddenexec.Command(e.spec.Command, e.spec.Args...)
+	cmd.Dir = e.spec.Cwd
 	// Do not delegate the daemon's bearer credentials or harness identity to tools.
 	cmd.Env = toolEnv(os.Environ())
 	if err := cmd.Start(); err != nil {
-		return launched{}, err
-	}
-	sysinfo.RegisterChild(cmd.Process.Pid, false)
-	l := launched{cmd: cmd}
-	if tree, err := sysinfo.RegisteredTree(cmd.Process.Pid); err == nil && len(tree) > 0 {
-		l.identity = tree[0].Start
-	}
-	return l, nil
-}
-
-// publish makes a launch the entry's program (or records that it failed). Called with r.mu
-// held; Wait alone owns cmd.Wait. A Detach that came while it started leaves a hosted tool
-// running in its host, as it does for one that had started.
-func (r *Registry) publish(e *entry, l launched, err error) {
-	if err != nil {
-		e.cmd, e.conn = nil, nil
+		e.cmd = nil
 		e.info.PID = 0
 		e.info.State = "retrying"
-		return
+		return err
 	}
-	e.info.StartedAt = model.Now()
-	if l.conn != nil {
-		r.attach(e, l.conn)
-		r.saveMeta(e)
-		if e.detached {
-			_ = l.conn.Close()
-		}
-		return
+	sysinfo.RegisterChild(cmd.Process.Pid, false)
+	e.identity = 0
+	if tree, err := sysinfo.RegisteredTree(cmd.Process.Pid); err == nil && len(tree) > 0 {
+		e.identity = tree[0].Start
 	}
-	e.cmd = l.cmd
-	e.identity = l.identity
+	e.cmd = cmd
 	e.exited = make(chan struct{})
-	e.info.PID = l.cmd.Process.Pid
+	e.info.PID = cmd.Process.Pid
+	e.info.StartedAt = model.Now()
 	e.info.State = "running"
-	go func(cmd *exec.Cmd, done chan struct{}) { _ = cmd.Wait(); close(done) }(l.cmd, e.exited)
+	go func(done chan struct{}) { _ = cmd.Wait(); close(done) }(e.exited)
+	return nil
 }
 
 func (r *Registry) supervise(e *entry) {
@@ -221,11 +160,7 @@ func (r *Registry) supervise(e *entry) {
 			return
 		}
 		e.info.Restarts++
-		how := r.howToStart(e)
-		r.mu.Unlock()
-		l, err := how.launch()
-		r.mu.Lock()
-		r.publish(e, l, err) // a stop meanwhile ends it at the top of the loop
+		_ = r.spawn(e)
 		r.mu.Unlock()
 	}
 }
@@ -268,9 +203,7 @@ func (r *Registry) List() []model.ProcessInfo {
 	defer r.mu.Unlock()
 	out := make([]model.ProcessInfo, 0, len(r.entries))
 	for _, e := range r.entries {
-		if !e.starting {
-			out = append(out, e.info)
-		}
+		out = append(out, e.info)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out

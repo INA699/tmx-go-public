@@ -73,7 +73,7 @@ export function HarnessBadge({ harness, mode, className }: { harness: Harness; m
   return (
     <span
       className={cn(pill, "border-border bg-background text-foreground/80", className)}
-      title={`${harnessLabel(harness)}${mode ? (mode === "terminal" ? " in its own screen (read by Tiamatrix)" : " in chat mode (structured)") : ""}`}
+      title={`${harnessLabel(harness)}${mode ? (mode === "terminal" ? " in its own screen (read by tmx)" : " in chat mode (structured)") : ""}`}
     >
       {mode && <Icon className="size-3 text-muted-foreground" aria-hidden />}
       {harnessLabel(harness)}

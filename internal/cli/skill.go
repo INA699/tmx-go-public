@@ -10,7 +10,7 @@ import (
 )
 
 const skillUsage = `usage: tmx skill                     print SKILL.md (for AI agents)
-       tmx skill install [--dir DIR]   write it to DIR/SKILL.md (default ~/.claude/skills/tmx)
+       tmx skill install [--dir DIR]   write it to DIR/SKILL.md (default ~/.claude/skills/tmxg)
        tmx skill path                print the default install path`
 
 // cmdSkill prints or installs SKILL.md; it needs no daemon.
@@ -32,7 +32,7 @@ func cmdSkill(e *env, args []string) error {
 		return nil
 	case "install":
 		fs := newFlags("skill install")
-		dir := fs.String("dir", "", "folder to write SKILL.md into (default ~/.claude/skills/tmx)")
+		dir := fs.String("dir", "", "folder to write SKILL.md into (default ~/.claude/skills/tmxg)")
 		pos, err := parse(fs, args[1:])
 		if err != nil {
 			return err
@@ -56,7 +56,7 @@ func cmdSkill(e *env, args []string) error {
 	return usageErr(skillUsage)
 }
 
-// installSkill writes SKILL.md into dir (default ~/.claude/skills/tmx) unless it is there
+// installSkill writes SKILL.md into dir (default ~/.claude/skills/tmxg) unless it is there
 // with the same content already. It reports the file's path and whether it wrote it.
 func installSkill(dir string) (string, bool, error) {
 	if dir == "" {

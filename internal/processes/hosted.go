@@ -46,22 +46,28 @@ func (r *Registry) saveMeta(e *entry) {
 	}
 }
 
-// launchHosted starts the tool in a session host. Called without r.mu: the host takes
-// seconds to come up.
-func launchHosted(p startPlan) (*host.Conn, error) {
-	if err := os.MkdirAll(p.toolDir, 0o700); err != nil {
-		return nil, err
+// spawnHosted starts the tool in a session host. Called with r.mu held.
+func (r *Registry) spawnHosted(e *entry) error {
+	dir := r.toolDir(e.info.ID)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	c, err := spawnHost(ctx, p.hostExe, filepath.Join(p.toolDir, "host"), host.Spec{Path: p.spec.Command, Args: p.spec.Args, Cwd: p.spec.Cwd,
+	e.dir = filepath.Join(dir, "host")
+	c, err := host.Spawn(ctx, r.hostExe, e.dir, host.Spec{Path: e.spec.Command, Args: e.spec.Args, Cwd: e.spec.Cwd,
 		// Do not delegate the daemon's bearer credentials or harness identity to tools.
 		Env: toolEnv(os.Environ()), Piped: true})
 	if err != nil {
-		_ = os.RemoveAll(p.toolDir)
-		return nil, err
+		_ = os.RemoveAll(dir)
+		e.info.PID = 0
+		e.info.State = "retrying"
+		return err
 	}
-	return c, nil
+	e.info.StartedAt = model.Now()
+	r.attach(e, c)
+	r.saveMeta(e)
+	return nil
 }
 
 // attach makes c the entry's program: registered for the resource brakes (anchored to its
@@ -120,8 +126,7 @@ func (r *Registry) Detach() {
 			continue
 		}
 		e.stopping = true
-		// A hosted tool still starting is left running too, once it started (publish).
-		if e.conn != nil || e.unknown || (e.starting && r.hosted(e)) {
+		if e.conn != nil || e.unknown {
 			e.detached = true
 		}
 		if e.conn != nil {
@@ -222,9 +227,8 @@ func (r *Registry) superviseUnknown(e *entry) {
 	r.forgetHosted(e)
 }
 
-// stopHost, dialHost and spawnHost are host.Stop, host.Dial and host.Spawn; variables for tests.
+// stopHost and dialHost are host.Stop and host.Dial; variables for tests.
 var (
-	stopHost  = host.Stop
-	dialHost  = host.Dial
-	spawnHost = host.Spawn
+	stopHost = host.Stop
+	dialHost = host.Dial
 )

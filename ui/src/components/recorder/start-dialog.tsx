@@ -20,8 +20,8 @@ import type { RecorderSettings } from "@/lib/recording-types";
 import { DEFAULT_RECORDER_SETTINGS } from "@/lib/record-now";
 import { isLive } from "@/lib/recording-types";
 import { cn } from "@/lib/utils";
-import { sensitiveDefault, setSensitiveDefault } from "@/lib/sensitive";
-import { SensitiveCheckbox } from "@/components/recorder/sensitive-checkbox";
+import { clinicDefault, setClinicDefault } from "@/lib/clinic";
+import { ClinicCheckbox } from "@/components/recorder/clinic-checkbox";
 
 export function StartRecordingDialog() {
   const open = useCapture((s) => s.dialog);
@@ -39,7 +39,7 @@ export function StartRecordingDialog() {
   const [cameraId, setCameraId] = useState(DEFAULT_DEVICE);
   const [micId, setMicId] = useState(DEFAULT_DEVICE);
   const [title, setTitle] = useState("");
-  const [sensitive, setSensitive] = useState(sensitiveDefault);
+  const [clinic, setClinic] = useState(clinicDefault);
   const [settings, setSettings] = useState<RecorderSettings | null>(null);
   const [error, setError] = useState("");
   const camOn = open && what === "camera" && cameraOK;
@@ -56,7 +56,7 @@ export function StartRecordingDialog() {
     if (!open) return;
     setTitle("");
     setError("");
-    setSensitive(sensitiveDefault());
+    setClinic(clinicDefault());
     setDeviceAudio(deviceLikely);
     setWhat(screenOK ? "screen" : "audio");
     let gone = false;
@@ -203,7 +203,7 @@ export function StartRecordingDialog() {
             onKeyDown={(e) => e.key === "Enter" && start()}
           />
         </div>
-        <SensitiveCheckbox checked={sensitive} onChange={(on) => (setSensitive(on), setSensitiveDefault(on))} />
+        <ClinicCheckbox checked={clinic} onChange={(on) => (setClinic(on), setClinicDefault(on))} />
         <div className="grid gap-1 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           <p className="font-medium text-foreground">Recording other people? Ask them first.</p>
           <p>Only what you pick here is recorded. A red bar shows on every page while it runs.</p>

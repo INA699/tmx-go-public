@@ -8,7 +8,7 @@ import (
 func TestFrontMatter(t *testing.T) {
 	s := string(Content())
 	head, _, ok := strings.Cut(strings.TrimPrefix(s, "---\n"), "\n---\n")
-	if !strings.HasPrefix(s, "---\n") || !ok || !strings.Contains(head, "name: tmx\n") || !strings.Contains(head, "description: ") {
+	if !strings.HasPrefix(s, "---\n") || !ok || !strings.Contains(head, "name: tmxg\n") || !strings.Contains(head, "description: ") {
 		t.Fatalf("front matter: %q", s[:min(len(s), 200)])
 	}
 	c := Content()

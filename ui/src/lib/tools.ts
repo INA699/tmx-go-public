@@ -45,15 +45,6 @@ function str(v: unknown): string {
   return typeof v === "string" ? v : v == null ? "" : JSON.stringify(v);
 }
 
-/**
- * The tool's own name ("send", "report", ...) when it is one of tmx's MCP tools: mcp__tmx__<tool>,
- * or mcp__tmxg__<tool> as builds named tmxg recorded it. Otherwise null.
- */
-export function tmxTool(name: string | undefined): string | null {
-  const m = /^mcp__tmxg?__(.+)$/.exec(name ?? "");
-  return m ? m[1] : null;
-}
-
 export function asInput(input: unknown): Input {
   if (input && typeof input === "object" && !Array.isArray(input)) return input as Input;
   if (typeof input === "string") {
@@ -136,17 +127,14 @@ export function summarizeTool(tool: string | undefined, input: unknown, cwd?: st
     case "ExitPlanMode":
       return { icon: ListChecks, label: "Plan", detail: "Proposed a plan", mono: false };
   }
-  const own = tmxTool(name);
-  if (own !== null) {
-    if (TMX[own]) {
-      const r = TMX[own](i);
-      return { icon: r.icon, label: "", detail: r.text, mono: false };
-    }
-    return { icon: Mail, label: "Tiamatrix", detail: own.replace(/_/g, " "), mono: false };
-  }
   const mcp = /^mcp__([^_]+(?:_[^_]+)*?)__(.+)$/.exec(name);
   if (mcp) {
     const [, server, t] = mcp;
+    if (server === "tmx" && TMX[t]) {
+      const r = TMX[t](i);
+      return { icon: r.icon, label: "", detail: r.text, mono: false };
+    }
+    if (server === "tmx") return { icon: Mail, label: "tmx", detail: t.replace(/_/g, " "), mono: false };
     return { icon: Plug, label: server, detail: t.replace(/_/g, " "), mono: false };
   }
   return { icon: Wrench, label: name, detail: "", mono: false };

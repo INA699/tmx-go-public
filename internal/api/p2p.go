@@ -102,9 +102,9 @@ func (s *Server) p2pSetName(w http.ResponseWriter, r *http.Request) {
 //
 // dht is optional: omitting it leaves config.json's own "dht" untouched and lets
 // Config.EffectiveDHT() decide at the next start (production + enabled + not explicitly chosen
-// -> on by default, client mode: it finds relays and moved contacts; mDNS and NAT port mapping
-// default on the same way, Config.EffectiveMDNS). Setting dht here marks it DHTExplicit: a
-// real owner+PIN choice, which EffectiveDHT then always respects, even to false.
+// -> on by default, outbound-only: AutoRelay/AutoNATv2, host.go:238 - no inbound listener, no
+// NATPortMap, no firewall prompt). Setting dht here marks it DHTExplicit: a real owner+PIN
+// choice, which EffectiveDHT then always respects, even to false.
 func (s *Server) putP2PConfig(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Enabled bool  `json:"enabled"`
@@ -153,7 +153,7 @@ func (s *Server) putP2PConfig(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/p2p/restart: a graceful self-restart (the same path POST /api/fleet-ops/restart
 // uses for the head/leads; agents keep running, the daemon starts itself again), offered here
-// so turning peer-to-peer on or off can take effect without the owner running a command.
+// so turning peer-to-peer on or off can take effect without the owner running a command herself.
 func (s *Server) p2pRestartNow(w http.ResponseWriter, r *http.Request) {
 	if s.selfRestart == nil {
 		writeError(w, http.StatusNotImplemented, "this daemon cannot restart itself")

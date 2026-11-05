@@ -277,13 +277,13 @@ func TestSkillCommands(t *testing.T) {
 		t.Setenv("USERPROFILE", home) // os.UserHomeDir reads USERPROFILE here
 	}
 	out, _, code := tmx(t, "skill")
-	if code != 0 || !strings.HasPrefix(out, "---\nname: tmx\ndescription: ") || !strings.Contains(out, "# tmx (Tiamatrix)") {
+	if code != 0 || !strings.HasPrefix(out, "---\nname: tmxg\ndescription: ") || !strings.Contains(out, "tmxg fleet trial") {
 		t.Fatalf("skill: %d %q", code, out[:min(len(out), 200)])
 	}
-	if p, _, code := tmx(t, "skill", "path"); code != 0 || !strings.HasSuffix(strings.TrimSpace(p), filepath.Join(".claude", "skills", "tmx", "SKILL.md")) {
+	if p, _, code := tmx(t, "skill", "path"); code != 0 || !strings.HasSuffix(strings.TrimSpace(p), filepath.Join(".claude", "skills", "tmxg", "SKILL.md")) {
 		t.Fatalf("path: %d %q", code, p)
 	}
-	dir := filepath.Join(t.TempDir(), "skills", "tmx")
+	dir := filepath.Join(t.TempDir(), "skills", "tmxg")
 	p, errs, code := tmx(t, "skill", "install", "--dir", dir)
 	if code != 0 || strings.TrimSpace(p) != filepath.Join(dir, "SKILL.md") || strings.Contains(errs, "up to date") {
 		t.Fatalf("install: %d %q %q", code, p, errs)

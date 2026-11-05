@@ -34,8 +34,8 @@ func TestProcessHelper(t *testing.T) {
 }
 
 func TestStopReapsPinnedDescendants(t *testing.T) {
-	if runtime.GOOS != "windows" && runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
-		t.Skip("identity-pinned tree control supported on Windows, Linux and macOS")
+	if runtime.GOOS != "windows" && runtime.GOOS != "linux" {
+		t.Skip("identity-pinned tree control supported on Windows and Linux")
 	}
 	r := New()
 	t.Cleanup(r.Close)

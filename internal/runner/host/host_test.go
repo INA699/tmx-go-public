@@ -10,15 +10,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/blackcode-ch/tmx-go/internal/hiddenexec"
 	"github.com/blackcode-ch/tmx-go/internal/runner/host/hosttest"
-	"github.com/blackcode-ch/tmx-go/internal/sysinfo"
 )
 
 // The test binary is also `tmx host [--launch] DIR` and the program a host runs (TMXG_FAKE_PROG):
@@ -42,10 +38,6 @@ func TestMain(m *testing.M) {
 		}
 		os.Exit(0)
 	}
-	if os.Getenv("TMXG_FAKE_SLEEP") == "1" { // a program's own child (TMXG_FAKE_TREE)
-		time.Sleep(time.Minute)
-		os.Exit(0)
-	}
 	if os.Getenv("TMXG_FAKE_PROG") == "1" {
 		fakeProg()
 		os.Exit(0)
@@ -54,13 +46,6 @@ func TestMain(m *testing.M) {
 }
 
 func fakeProg() {
-	if f := os.Getenv("TMXG_FAKE_TREE"); f != "" { // a child of its own, its PID in f
-		child := hiddenexec.Command(os.Args[0])
-		child.Env = append(os.Environ(), "TMXG_FAKE_SLEEP=1")
-		if child.Start() != nil || os.WriteFile(f, []byte(strconv.Itoa(child.Process.Pid)), 0o600) != nil {
-			os.Exit(5)
-		}
-	}
 	fmt.Print("ready\n")
 	sc := bufio.NewScanner(os.Stdin)
 	for sc.Scan() {
@@ -496,52 +481,4 @@ func TestStopEndsTheHostWhenTheProgramIsGone(t *testing.T) {
 	if gone, err := Stop(dir); err != nil || gone || !*killed {
 		t.Fatalf("gone=%v err=%v killed=%v", gone, err, *killed)
 	}
-}
-
-// A host's kill ends what its piped program started too, not only the program: on Unix by its
-// process group; on Windows, which has none, by the verified tree of the child the host
-// registered (a .cmd shim's node must not survive a stop).
-func TestKillEndsTheProgramsTree(t *testing.T) {
-	pidFile := filepath.Join(t.TempDir(), "child-pid")
-	env := append(os.Environ(), "TMXG_FAKE_PROG=1", "TMXG_FAKE_TREE="+pidFile)
-	h := &host{exited: make(chan struct{}), keep: keepPiped}
-	if err := h.start(Spec{Path: os.Args[0], Env: env, Cwd: t.TempDir(), Piped: true}); err != nil {
-		t.Fatal(err)
-	}
-	waited := false
-	t.Cleanup(func() {
-		if !waited {
-			h.kill()
-			_ = h.cmd.Wait()
-		}
-	})
-	child := 0
-	deadline := time.Now().Add(10 * time.Second)
-	for child == 0 && time.Now().Before(deadline) {
-		b, _ := os.ReadFile(pidFile)
-		child, _ = strconv.Atoi(string(b))
-		time.Sleep(10 * time.Millisecond)
-	}
-	if child == 0 {
-		t.Fatal("the program did not start its child")
-	}
-	tree, err := sysinfo.RegisteredTree(h.pid)
-	if err != nil || !slices.ContainsFunc(tree, func(p sysinfo.Proc) bool { return p.PID == child }) {
-		t.Fatalf("the program's tree is not registered with the host: %v %+v", err, tree)
-	}
-	h.kill()
-	_ = h.cmd.Wait()
-	waited = true
-	deadline = time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		rows, err := sysinfo.Procs()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !slices.ContainsFunc(rows, func(p sysinfo.Proc) bool { return p.PID == child }) {
-			return
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Fatal("the program's child survived the kill")
 }

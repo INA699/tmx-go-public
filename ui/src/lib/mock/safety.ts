@@ -106,7 +106,7 @@ export const MOCK_RULES: GuardRule[] = [
     "outcome": "block",
     "name": "tmx owner commands",
     "summary": "Running the tmx command to act as the owner (approve, deny, rm, send, gate, open, ...).",
-    "why": "The tmx command acts with the owner's token. Agents use their mcp__tmx__* tools instead.",
+    "why": "The tmx command acts with the owner's token. Agents use their mcp__tmxg__* tools instead.",
     "examples": [
       "tmx approve k2m4n6p8q3",
       "tmx gate off",

@@ -1,3 +1,0 @@
-self-hosted-runner:
-  # The owner's Mac (scripts/ci-runner.sh): only build.yml's owner-pushed release-tag jobs use it.
-  labels: [tmx-mac]

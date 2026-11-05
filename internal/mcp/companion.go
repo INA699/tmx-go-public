@@ -43,7 +43,7 @@ type CompanionTools struct {
 // NewCompanionServer builds the server; token is called for every request.
 func NewCompanionServer(baseURL string, token func() (string, error)) *sdk.Server {
 	t := &CompanionTools{url: baseURL, token: token}
-	s := sdk.NewServer(&sdk.Implementation{Name: model.MCPServer, Version: config.Version},
+	s := sdk.NewServer(&sdk.Implementation{Name: config.ProductName, Version: config.Version},
 		&sdk.ServerOptions{Instructions: companionInstructions})
 	sdk.AddTool(s, &sdk.Tool{Name: "tmx_fleet", Description: "The owner's coding agents in tmx on this computer: projects and agents with their state (working, idle, waiting, queued, paused, stopped, error), role and mail waiting. Read-only."}, t.fleet)
 	sdk.AddTool(s, &sdk.Tool{Name: "tmx_needs_you", Description: "What waits for the owner's decision in tmx (permission requests, questions, held commands). Read-only: the owner answers in tmx."}, t.needs)

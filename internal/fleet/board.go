@@ -23,11 +23,11 @@ import (
 const boardRules = `The owner follows your conversation on a board of topics. A turn filed under a topic starts with "[topic: <title>]"; ` +
 	`chat messages are filed under their chat, anything else without that line under General; ` +
 	`what you do and say in that turn (replies, messages, launches, questions) is filed there too. ` +
-	`When the owner starts something that belongs elsewhere (new work, or another project), first call mcp__tmx__thread_set with the right topic: ` +
+	`When the owner starts something that belongs elsewhere (new work, or another project), first call mcp__tmxg__thread_set with the right topic: ` +
 	`a project's name files the turn with that project, a new title opens a new topic. Keep each turn to one topic. ` +
-	`mcp__tmx__threads lists the topics in the owner's order of urgency, most urgent first; when the owner asks, rename, archive, restore or delete one with mcp__tmx__thread_update. ` +
-	`Each topic keeps a log of short lines worth keeping (decision, action, info, link): file important outcomes with mcp__tmx__thread_add as they happen (a correction is a new line with corrects), ` +
-	`and read a topic's log with mcp__tmx__thread_read before you work on it.`
+	`mcp__tmxg__threads lists the topics in the owner's order of urgency, most urgent first; when the owner asks, rename, archive, restore or delete one with mcp__tmxg__thread_update. ` +
+	`Each topic keeps a log of short lines worth keeping (decision, action, info, link): file important outcomes with mcp__tmxg__thread_add as they happen (a correction is a new line with corrects), ` +
+	`and read a topic's log with mcp__tmxg__thread_read before you work on it.`
 
 const (
 	maxThreadTitle = 80
@@ -143,20 +143,20 @@ func (f *Fleet) inferThreadLocked(turn []model.TimelineEntry) string {
 			}
 		case model.EntryToolUse:
 			in := toolInput(e)
-			switch model.TmxTool(e.Tool) {
-			case "project_create":
+			switch e.Tool {
+			case "mcp__tmxg__project_create":
 				if p, err := f.projectLocked(Slugify(in["name"])); err == nil {
 					if t := f.projectThreadLocked(p.ID); t != "" {
 						return t
 					}
 				}
-			case "agent_launch":
+			case "mcp__tmxg__agent_launch":
 				if p, err := f.projectLocked(in["project"]); in["project"] != "" && err == nil {
 					projects[p.ID] = true
 				} else {
 					byAgent(in["name"])
 				}
-			case "send":
+			case "mcp__tmxg__send":
 				if in["to"] != model.Owner {
 					byAgent(in["to"])
 				}
@@ -237,7 +237,7 @@ func (f *Fleet) topicLineLocked(id string) string {
 	if threadOr(id) == model.GeneralThread || strings.HasPrefix(id, model.ChatThread("")) {
 		return ""
 	}
-	line := "[topic: " + peertext.Field(f.threadTitleLocked(id)) // agents name topics: one line, no brackets
+	line := "[topic: " + f.threadTitleLocked(id)
 	if all, err := f.st.Entries(id); err == nil {
 		if n := len(liveEntries(all)); n > 0 {
 			line += fmt.Sprintf(" · %d %s in its log", n, map[bool]string{true: "line", false: "lines"}[n == 1])
@@ -775,24 +775,24 @@ func chatSender(from string) string {
 
 func summarizeTool(c *model.BoardCard, e model.TimelineEntry) {
 	in := toolInput(e)
-	switch model.TmxTool(e.Tool) {
-	case "send":
+	switch e.Tool {
+	case "mcp__tmxg__send":
 		if in["to"] == model.Owner {
 			c.Notes = append(c.Notes, clip(in["body"], cardNote))
 		} else if in["to"] != "" {
 			c.SentTo = appendUnique(c.SentTo, in["to"])
 		}
-	case "report":
+	case "mcp__tmxg__report":
 		c.Notes = append(c.Notes, clip(in["body"], cardNote))
-	case "agent_launch":
+	case "mcp__tmxg__agent_launch":
 		if in["name"] != "" {
 			c.Launched = appendUnique(c.Launched, in["name"])
 		}
-	case "project_create":
+	case "mcp__tmxg__project_create":
 		if in["name"] != "" {
 			c.Projects = appendUnique(c.Projects, in["name"])
 		}
-	case "ask_owner":
+	case "mcp__tmxg__ask_owner":
 		if in["question"] != "" {
 			c.Asked = append(c.Asked, clip(in["question"], cardNote))
 		}

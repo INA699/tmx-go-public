@@ -306,7 +306,7 @@ export function NewAgentDialog({ project, open, onOpenChange }: { project: Proje
           <div className="grid gap-1.5">
             {(harness === "agy" || harness === "antigravity") && <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" checked={agyFullAccess} disabled={prof?.read_only} onChange={(e) => setAgyFullAccess(e.target.checked)} />
-              <span>Skip this agent's permission prompts. Requires owner confirmation when the gate is on; resets when Tiamatrix restarts.</span>
+              <span>Skip this agent's permission prompts. Requires owner confirmation when the gate is on; resets when tmx restarts.</span>
             </label>}
             <Label htmlFor="na-role">Role</Label>
             <Input id="na-role" value={role} onChange={(e) => setRole(e.target.value)} placeholder="e.g. backend, tests, docs" />

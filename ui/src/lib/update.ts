@@ -78,6 +78,6 @@ export async function windowVersion(): Promise<string | null> {
 /** Restarts the desktop window onto the installed tmx. */
 export async function relaunchWindow(): Promise<void> {
   const app = window.go?.desktop?.App as { Relaunch?: () => Promise<void> } | undefined;
-  if (!app?.Relaunch) throw new Error("Close and open Tiamatrix again to finish the update.");
+  if (!app?.Relaunch) throw new Error("Close and open tmx again to finish the update.");
   await app.Relaunch();
 }

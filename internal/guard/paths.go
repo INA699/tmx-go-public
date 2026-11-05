@@ -72,7 +72,7 @@ func inside(p, root string) bool { return p != root && within(p, root) }
 
 // userContent: p lies inside one of the owner's own folders under the home (Documents\x,
 // Desktop\y, D... at least two levels below the home), where deleting a tree is ordinary work,
-// not machine protection (ordinary deletes in user folders never ask the owner).
+// not machine protection (the owner, 3 Nov 13:55: ordinary deletes in user folders never ask him).
 // Not the home itself or its direct folders, not AppData/Library or dot-folders (programs and
 // credentials live there), and never a folder named NROP (the owner's private exclusion).
 func (a *analyzer) userContent(p string) bool {

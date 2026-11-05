@@ -125,7 +125,7 @@ func TestConfigAndUpdatesGateOn(t *testing.T) {
 		{"auto off", "PUT", "/api/update", map[string]any{"auto": false}, map[string]any{"auto": false, "channel": "latest"},
 			"turn automatic updates off", func(t *testing.T, d *apitest.Daemon) bool { a := d.UpdateSettings().Auto; return a != nil && !*a }},
 		{"channel", "PUT", "/api/update", map[string]any{"channel": "latest"}, map[string]any{"channel": "stable"},
-			"take updates from releases including prereleases",
+			"take updates from fleet releases including prereleases",
 			func(t *testing.T, d *apitest.Daemon) bool { return d.UpdateSettings().Channel == "latest" }},
 		{"install now", "POST", "/api/update/install", map[string]bool{"now": true}, map[string]bool{"now": false},
 			"install the newest release now and restart, cutting off agents' steps in progress", nil},

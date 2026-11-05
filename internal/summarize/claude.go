@@ -42,13 +42,13 @@ const disallowed = "Bash,Edit,Write,MultiEdit,NotebookEdit,WebFetch,WebSearch,Ta
 
 // ask is one claude run.
 type ask struct {
-	dir       string // working folder: the recording's
-	system    string
-	prompt    string // on stdin
-	frames    int    // frames it may read; 0 = no tools at all
-	model     string
-	paths     []string // the frames' paths relative to dir (the local model gets them as images)
-	localOnly bool     // a sensitive recording: local models only
+	dir    string // working folder: the recording's
+	system string
+	prompt string // on stdin
+	frames int    // frames it may read; 0 = no tools at all
+	model  string
+	paths  []string // the frames' paths relative to dir (the local model gets them as images)
+	clinic bool     // patient data: local models only
 }
 
 // turns is the run's --max-turns: one per frame (Claude may read several at once), and a few
@@ -127,15 +127,15 @@ func parseResult(out []byte) (result, bool) {
 
 var unknownOptRx = regexp.MustCompile(`unknown option '(--[a-z-]+)'`)
 
-// run writes one answer with the model that fits: the cheap
+// run writes one answer with the model that fits (the owner, 3 Nov: "we care only about performance"): the cheap
 // cloud model by default, and a configured local model (summaries.local_url or via_peer) when the cloud model is not
-// available; with summaries.backend "local" the local model first and the cloud model when there is no local route. A recording marked sensitive is the one exception:
+// available; with summaries.backend "local" the local model first and the cloud model when there is no local route. A clinic recording (patient data, nLPD) is the one exception:
 // local models only, and without one it fails with the reason.
 func (s *Service) run(ctx context.Context, a ask) (string, error) {
-	if a.localOnly {
+	if a.clinic {
 		text, err := s.runLocal(ctx, a)
 		if err != nil {
-			return "", fmt.Errorf("a recording marked sensitive is summarized by local models only, and %w", err)
+			return "", fmt.Errorf("a clinic recording is summarized by local models only (patient data, nLPD), and %w", err)
 		}
 		s.wrote(s.localModel())
 		return text, nil
@@ -275,7 +275,7 @@ func (s *Service) write(ctx context.Context, r model.Recording, in input, m stri
 	frames := len(in.frames)
 	parts, dropped := split(in.lines, r.DurationMS, MaxChars, MaxParts)
 	if len(parts) <= 1 && dropped < 0 {
-		text, err := s.run(ctx, ask{dir: r.Dir, localOnly: r.LocalOnly(), system: systemPrompt(frames), prompt: singlePrompt(r, in), frames: frames, model: m, paths: framePaths(in)})
+		text, err := s.run(ctx, ask{dir: r.Dir, clinic: r.Clinic(), system: systemPrompt(frames), prompt: singlePrompt(r, in), frames: frames, model: m, paths: framePaths(in)})
 		if err != nil {
 			return model.RecordingSummary{}, 1, err
 		}
@@ -284,7 +284,7 @@ func (s *Service) write(ctx context.Context, r model.Recording, in input, m stri
 	}
 	sums := make([]model.RecordingSummary, len(parts))
 	for i, c := range parts {
-		text, err := s.run(ctx, ask{dir: r.Dir, localOnly: r.LocalOnly(), system: partSystemPrompt, prompt: partPrompt(r, in, c, i, len(parts)), model: m})
+		text, err := s.run(ctx, ask{dir: r.Dir, clinic: r.Clinic(), system: partSystemPrompt, prompt: partPrompt(r, in, c, i, len(parts)), model: m})
 		if err == nil {
 			sums[i], err = parseAnswer(text)
 		}
@@ -292,7 +292,7 @@ func (s *Service) write(ctx context.Context, r model.Recording, in input, m stri
 			return model.RecordingSummary{}, len(parts), fmt.Errorf("part %d of %d: %w", i+1, len(parts), err)
 		}
 	}
-	text, err := s.run(ctx, ask{dir: r.Dir, localOnly: r.LocalOnly(), system: systemPrompt(frames), prompt: combinePrompt(r, in, parts, sums, dropped), frames: frames, model: m, paths: framePaths(in)})
+	text, err := s.run(ctx, ask{dir: r.Dir, clinic: r.Clinic(), system: systemPrompt(frames), prompt: combinePrompt(r, in, parts, sums, dropped), frames: frames, model: m, paths: framePaths(in)})
 	if err != nil {
 		return model.RecordingSummary{}, len(parts), fmt.Errorf("combining the %d parts: %w", len(parts), err)
 	}

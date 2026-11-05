@@ -1,4 +1,4 @@
-// Browser e2e harness: the owner's screens in a real browser, the way the owner
+// Browser e2e harness (recorder-fix-o for tmx-lead, 3 Nov 2026): the owner's screens in a real browser, the way he
 // uses them. Linux CI only (.github/workflows/e2e.yml): a browser never runs on the owner's PCs.
 //
 // Each test gets a THROWAWAY daemon: the gatesim build (owner approvals without an OS prompt, only for a fresh

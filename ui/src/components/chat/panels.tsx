@@ -304,7 +304,7 @@ function AdminOfferNote({ chat }: { chat: Chat }) {
   return (
     <div className="mt-3 rounded-lg border bg-muted/40 px-3 py-2.5" data-admin-offer>
       <p className="flex items-center gap-1.5 text-[0.8125rem] font-medium">
-        <Loader2 className="size-3.5 animate-spin text-muted-foreground" /> Waiting for {name}'s Tiamatrix…
+        <Loader2 className="size-3.5 animate-spin text-muted-foreground" /> Waiting for {name}'s tmx…
       </p>
       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
         {!o.sent
@@ -410,7 +410,7 @@ function MakeAdminDialog({
             <div className="space-y-1">
               {old > 0 && (
                 <p>
-                  {old} {old === 1 ? "member" : "members"} may need to update Tiamatrix first; until then their member list stays as it is.
+                  {old} {old === 1 ? "member" : "members"} may need to update tmx first; until then their member list stays as it is.
                 </p>
               )}
               {target && !target.handover && <p>If {name}'s tmx needs an update, the handover waits until it has one.</p>}

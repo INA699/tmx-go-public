@@ -9,7 +9,6 @@ import { ownerAction, withConfirmation } from "./owner-gate";
 import type { Approval, BusEvent } from "./types";
 import type { WaChat, WaMediaData, WaMessage, WaQR, WaSettings, WaStatus, WaUpload } from "./wa-types";
 import { WA_PAGE } from "./wa-types";
-import { tmxTool } from "./tools";
 
 export interface WaMessageList {
   list: WaMessage[];
@@ -320,7 +319,7 @@ export function waSummary(m: Pick<WaMessage, "type" | "text" | "caption" | "medi
     case "reaction":
       return cap ? `Reacted ${cap}` : "Reacted";
     case "unsupported":
-      return "A message Tiamatrix can't show";
+      return "A message tmx can't show";
     default:
       return cap;
   }
@@ -337,11 +336,11 @@ export function waPreview(c: WaChat): string {
   return body;
 }
 
-const isSendTool = (tool: string) => tool === "whatsapp_send" || tmxTool(tool) === "whatsapp_send";
+const SEND_TOOLS = new Set(["mcp__tmxg__whatsapp_send", "whatsapp_send"]);
 
 /** An agent's send that the open WhatsApp chat already shows inline (no toast needed). */
 export function waSendShownAt(a: Approval, hash: string): boolean {
-  if (!isSendTool(a.tool) || !hash.startsWith("#/whatsapp/")) return false;
+  if (!SEND_TOOLS.has(a.tool) || !hash.startsWith("#/whatsapp/")) return false;
   const jid = decodeURIComponent(hash.slice("#/whatsapp/".length).split(/[/?]/)[0]);
   const chat = get().chats[jid];
   return !!chat && waSendApprovals({ [a.id]: a }, chat).length > 0;
@@ -350,7 +349,7 @@ export function waSendShownAt(a: Approval, hash: string): boolean {
 /** Pending agent sends waiting for the owner (whatsapp_send approvals), optionally for one chat. */
 export function waSendApprovals(approvals: Record<string, Approval>, chat?: Pick<WaChat, "jid" | "name">): Approval[] {
   return Object.values(approvals).filter((a) => {
-    if (a.state !== "pending" || !isSendTool(a.tool)) return false;
+    if (a.state !== "pending" || !SEND_TOOLS.has(a.tool)) return false;
     if (!chat) return true;
     const i = (a.input ?? {}) as Record<string, unknown>;
     const targets = [i.chat, i.jid, i.chat_jid, i.to].filter((v): v is string => typeof v === "string");

@@ -14,20 +14,12 @@ type Caller struct {
 	// fleet, Needs you and chats, and message the head (DESIGN.md "Companion"); the API lets it
 	// reach nothing else. Never combined with Owner or AgentID.
 	Companion bool
-	// Peer is another fleet machine, authenticated by its pair token: it may launch, start,
-	// stop, restart and interrupt agents here, read their (non-shell) screens, and type or press
-	// keys into them and mail them the way a head agent does. It is never the owner: every
-	// owner-only route and action refuses it, and it has no agent record here
-	// (callerRecLocked refuses it, so every action that does not let peers in explicitly is
-	// closed to it). Never combined with Owner, AgentID or Companion. Empty for everyone else.
+	// Peer is another fleet machine, authenticated by its pair token (Python's "peer" role):
+	// a trusted architect/lead box operating this machine's agents (launch/screen/type/keys/
+	// restart), same standing as the owner for those routes. Never combined with Owner,
+	// AgentID or Companion. Empty for everyone else.
 	Peer string
-	// PeerAs is whom the peer acts for on its own machine (its on-behalf agent name), "" for
-	// the machine itself. Only with Peer.
-	PeerAs string
 }
-
-// PeerMachineName is the mail name of a peer machine acting for itself (no on-behalf agent).
-const PeerMachineName = "daemon"
 
 // CompanionCaller is Companion (the link token).
 var CompanionCaller = Caller{Companion: true}
@@ -38,21 +30,11 @@ var OwnerCaller = Caller{Owner: true}
 // AgentCaller is an agent acting through its token.
 func AgentCaller(id string) Caller { return Caller{AgentID: id} }
 
-// PeerCaller is another fleet machine, authenticated by its pair token, acting for itself.
-func PeerCaller(host string) Caller { return Caller{Peer: host} }
+// PeerCaller is another fleet machine, authenticated by its pair token (a "full" role peer,
+// never "cloud" or "guest": those stay boxed to their existing narrow routes).
+func PeerCaller(name string) Caller { return Caller{Peer: name} }
 
-// PeerCallerAs is another fleet machine acting for one of its own agents (name, as its on-behalf
-// header says). An invalid or reserved name stands for the machine itself.
-func PeerCallerAs(host, name string) Caller {
-	if !model.ValidName(name) || ReservedAgentName(name) {
-		name = ""
-	}
-	return Caller{Peer: host, PeerAs: name}
-}
-
-// ID is the caller as a message party: "owner", the agent ID, or for a peer machine its
-// party "fleet:<name>@<host>" (the on-behalf agent, or "daemon" for the machine itself) - mail
-// from a peer is labelled as the other machine's, never the owner's.
+// ID is the caller as a message party: "owner" or the agent ID.
 func (c Caller) ID() string {
 	if c.Owner {
 		return model.Owner
@@ -61,11 +43,7 @@ func (c Caller) ID() string {
 		return model.CompanionParty
 	}
 	if c.Peer != "" {
-		name := c.PeerAs
-		if name == "" {
-			name = PeerMachineName
-		}
-		return PeerParty(name, c.Peer)
+		return model.Owner // a trusted peer acts with the owner's standing on this machine
 	}
 	return c.AgentID
 }
@@ -84,15 +62,11 @@ func (f *Fleet) CallerForToken(token string) (Caller, bool) {
 	return AgentCaller(id), true
 }
 
-// callerRecLocked returns the calling agent's record (nil for the owner). A peer machine has no
-// record here and is refused: a nil record means the owner, so the few actions open to peers
-// (launch, act, screen, type, keys, mail) let them in explicitly, before calling this.
+// callerRecLocked returns the calling agent's record (nil for the owner, and nil for a
+// trusted peer machine: it has no agent record on this machine, standing like the owner here).
 func (f *Fleet) callerRecLocked(c Caller) (*agentRec, error) {
-	if c.Owner {
+	if c.Owner || c.Peer != "" {
 		return nil, nil
-	}
-	if c.Peer != "" {
-		return nil, errf(KindForbidden, "another machine of the fleet (%s) cannot do this here", c.Peer)
 	}
 	if c.Companion {
 		return nil, errf(KindForbidden, "Companion cannot do this in tmx")
@@ -190,17 +164,10 @@ func (f *Fleet) isDescendantLocked(target *agentRec, ancestorID string) bool {
 	return false
 }
 
-// authorizeActLocked: start/stop/restart/interrupt. The owner may act on anyone; a peer machine
-// on any agent but a shell (the owner's own terminal); a head or lead on its own subtree;
-// nobody on itself.
+// authorizeActLocked: start/stop/restart/interrupt. The owner may act on anyone; a head or
+// lead on its own subtree; nobody on itself.
 func (f *Fleet) authorizeActLocked(c Caller, target *agentRec) error {
-	if c.Owner {
-		return nil
-	}
-	if c.Peer != "" {
-		if target.a.Harness == model.HarnessShell {
-			return errf(KindForbidden, "only the owner can reach a shell")
-		}
+	if c.Owner || c.Peer != "" {
 		return nil
 	}
 	if c.AgentID == target.a.ID {

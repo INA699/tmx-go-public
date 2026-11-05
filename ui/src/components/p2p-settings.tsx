@@ -127,7 +127,7 @@ export function P2PSection() {
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {status.production
-                ? "Connect directly with other Tiamatrix installs: pairing, chats and files, with your own mesh instead of a central server."
+                ? "Connect directly with other tmx installs: pairing, chats and files, with your own mesh instead of a central server."
                 : "Needs the production profile (config.json \"profile\": \"production\"); it stays off in trial however this is set."}
             </p>
           </div>

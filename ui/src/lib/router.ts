@@ -16,6 +16,7 @@ export type Route =
   | { name: "whatsapp"; jid?: string }
   | { name: "companion" }
   | { name: "usage" }
+  | { name: "features" }
   | { name: "notfound"; path: string };
 
 function currentPath(): string {
@@ -42,6 +43,7 @@ export function parse(path: string): Route {
   if (parts[0] === "whatsapp" && parts.length <= 2) return { name: "whatsapp", jid: parts[1] };
   if (parts[0] === "companion" && parts.length === 1) return { name: "companion" };
   if (parts[0] === "usage" && parts.length === 1) return { name: "usage" };
+  if (parts[0] === "features" && parts.length === 1) return { name: "features" };
   return { name: "notfound", path: p };
 }
 
@@ -95,6 +97,8 @@ export const paths = {
   companion: () => "/companion",
   /** AI accounts and how much of their quota is used */
   usage: () => "/usage",
+  /** every ordered feature with its status and evidence */
+  features: () => "/features",
 };
 
 export function href(path: string): string {

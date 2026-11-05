@@ -14,7 +14,7 @@ func TestPortConfiguration(t *testing.T) {
 		want int
 		bad  bool
 	}{
-		{"default", "", "", 8787, false},
+		{"default", "", "", 8797, false},
 		{"configured", `{"port":8798}`, "", 8798, false},
 		{"override", `{"port":8798}`, "8799", 8799, false},
 		{"first override", "", "8799", 8799, false},
@@ -24,7 +24,7 @@ func TestPortConfiguration(t *testing.T) {
 		{"negative", `{"port":-1}`, "", 0, true},
 		{"too high", "", "65536", 0, true},
 		{"python", "", "8777", 0, true},
-		{"tmxg port kept", `{"port":8797}`, "", 8797, false},
+		{"existing http", `{"port":8787}`, "", 0, true},
 		{"existing secondary", "", "43911", 0, true},
 		{"existing p2p", "", "4001", 0, true},
 	} {

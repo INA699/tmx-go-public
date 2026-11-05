@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/blackcode-ch/tmx-go/internal/harness"
 	"github.com/blackcode-ch/tmx-go/internal/model"
@@ -61,25 +60,16 @@ func (f *Fleet) LaunchAgent(c Caller, req LaunchRequest) (model.Agent, error) {
 		f.appendLocked(r, model.TimelineEntry{Kind: model.EntrySystem, Text: "Owner opted this agy agent into skipping permission prompts. This opt-in resets when the daemon restarts."})
 	}
 	launcher, _ := f.callerRecLocked(c)
-	by := linkerName(launcher)
-	if c.Peer != "" {
-		by = f.nameOfLocked(c.ID())
-	}
-	f.linkLaunchLocked(by, thread, a)
+	f.linkLaunchLocked(linkerName(launcher), thread, a)
 	if a.CodexFullAccess {
 		f.log.Warn("owner opted Codex agent into full access", "agent", a.ID, "name", a.Name, "cwd", a.Cwd)
 	}
+	f.mu.Unlock()
+
 	prompt := req.Prompt
 	if prompt == "" {
 		prompt = req.Brief
 	}
-	if c.Peer != "" && prompt != "" {
-		// A peer's first instruction is labelled as the other machine's, like its mail: an
-		// unlabelled first turn would read as the owner's.
-		prompt = f.mailLineLocked(model.Message{From: c.ID(), Body: prompt})
-	}
-	f.mu.Unlock()
-
 	o := startOpts{StartOptions: StartOptions{Force: req.Force && c.Owner}}
 	_ = f.startAgentOpts(a.ID, prompt, o) // a failed start leaves the agent in state error
 	return f.Agent(a.ID)
@@ -88,12 +78,9 @@ func (f *Fleet) LaunchAgent(c Caller, req LaunchRequest) (model.Agent, error) {
 // prepareLaunchLocked validates req against the hierarchy and the policy and returns the
 // new agent (not yet registered).
 func (f *Fleet) prepareLaunchLocked(c Caller, req LaunchRequest) (model.Agent, error) {
-	var me *agentRec
-	var err error
-	if c.Peer == "" { // a peer has no record here: it launches what the head may (below)
-		if me, err = f.callerRecLocked(c); err != nil {
-			return model.Agent{}, err
-		}
+	me, err := f.callerRecLocked(c)
+	if err != nil {
+		return model.Agent{}, err
 	}
 	if req.CodexFullAccess && (!c.Owner || req.Harness != model.HarnessCodex) {
 		return model.Agent{}, errf(KindForbidden, "Codex full access requires an explicit owner opt-in for a Codex agent")
@@ -126,14 +113,6 @@ func (f *Fleet) prepareLaunchLocked(c Caller, req LaunchRequest) (model.Agent, e
 		}
 	}
 
-	if c.Peer != "" {
-		// Another machine launches as the head here could, never as the owner: the head's
-		// launch rights, no shell or full-access opt-in (below), and only inside this machine's
-		// workspace or the project's folder (cwd, below).
-		if hp := f.headProfileLocked(); !slices.Contains(hp.CanLaunch, prof.Slug) {
-			return model.Agent{}, errf(KindForbidden, "another machine of the fleet (%s) cannot launch %s agents here", c.Peer, prof.Slug)
-		}
-	}
 	if me != nil {
 		if mp := f.profileForLocked(me.a); !slices.Contains(mp.CanLaunch, prof.Slug) {
 			return model.Agent{}, errf(KindForbidden, "%s (profile %s) cannot launch %s agents", me.a.Name, mp.Slug, prof.Slug)
@@ -183,7 +162,7 @@ func (f *Fleet) prepareLaunchLocked(c Caller, req LaunchRequest) (model.Agent, e
 	if harness == model.HarnessShell && !c.Owner {
 		return model.Agent{}, errf(KindForbidden, "only the owner can launch a shell")
 	}
-	mdl, err := f.pickHarnessModelLocked(harness, prof, req.Model, c.Owner)
+	mdl, err := f.pickHarnessModelLocked(harness, prof, req.Model, me == nil)
 	if err != nil {
 		return model.Agent{}, err
 	}
@@ -201,9 +180,6 @@ func (f *Fleet) prepareLaunchLocked(c Caller, req LaunchRequest) (model.Agent, e
 		cwd = base
 	case !filepath.IsAbs(cwd):
 		cwd = filepath.Join(base, cwd)
-	}
-	if c.Peer != "" && !pathWithin(filepath.Clean(cwd), filepath.Clean(base)) {
-		return model.Agent{}, errf(KindForbidden, "another machine of the fleet launches only inside %s", base)
 	}
 
 	now := model.Now()
@@ -358,18 +334,4 @@ func (f *Fleet) configuredHeadHarness() (model.Harness, bool) {
 		return "", false
 	}
 	return "", false
-}
-
-// headProfileLocked is the head's profile (its launch rights are a peer machine's here).
-func (f *Fleet) headProfileLocked() model.Profile {
-	if h := f.headLocked(); h != nil {
-		return f.profileForLocked(h.a)
-	}
-	return f.profileForLocked(model.Agent{Level: model.LevelHead})
-}
-
-// pathWithin reports whether p is root or below it (both clean and absolute).
-func pathWithin(p, root string) bool {
-	rel, err := filepath.Rel(root, p)
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
 }

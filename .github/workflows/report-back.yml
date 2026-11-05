@@ -4,7 +4,7 @@
 # file, and only the mirror deploy key may push there.
 #
 # Identity (tmx-lead, review #155): a dedicated GitHub App, never the reviewer's or the owner's
-# account. It is installed on blackcode-ch/tmx-go only, with the single permission "Commit statuses:
+# account. It is installed on blackcode-ch/tmx-go-fleet only, with the single permission "Commit statuses:
 # write", so it can't read code. The private repo's required check "public-ci" is bound to this App as
 # its expected source, so a "public-ci" status from any other account doesn't count. This job also
 # refuses if the token turns out to be the reviewer identity (FLEET_REVIEW_LOGIN) or isn't the App.
@@ -41,7 +41,7 @@ jobs:
           app-id: ${{ vars.PUBLIC_CI_APP_ID }}
           private-key: ${{ secrets.PUBLIC_CI_APP_KEY }}
           owner: blackcode-ch
-          repositories: tmx-go
+          repositories: tmx-go-fleet
       - name: set status on the private commit
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
@@ -53,6 +53,6 @@ jobs:
           [ -n "$REVIEWER" ] && [ -n "$APP_SLUG" ] || { echo "::error::FLEET_REVIEW_LOGIN and the App must be configured"; exit 1; }
           [ "${APP_SLUG,,}" != "${REVIEWER,,}" ] || { echo "::error::the reporter must not be the reviewer identity"; exit 1; }
           case "$CONCLUSION" in success) s=success;; cancelled|skipped) s=error;; *) s=failure;; esac
-          gh api -X POST "repos/blackcode-ch/tmx-go/statuses/${{ steps.map.outputs.sha }}" \
+          gh api -X POST "repos/blackcode-ch/tmx-go-fleet/statuses/${{ steps.map.outputs.sha }}" \
             -f state="$s" -f context=public-ci -f target_url="$URL" \
             -f description="public CI: $CONCLUSION" > /dev/null

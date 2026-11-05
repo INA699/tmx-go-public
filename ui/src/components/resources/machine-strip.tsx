@@ -96,7 +96,7 @@ export function HeadPausedBanner() {
           <Pause className="size-3.5 fill-current text-[color-mix(in_oklch,var(--state-waiting)_80%,var(--foreground))]" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[0.8125rem] font-semibold">The head is paused by Tiamatrix</p>
+          <p className="text-[0.8125rem] font-semibold">The head is paused by tmx</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {head.paused_detail || "A resource brake stopped it."} It cannot answer you or run projects until it is resumed.{" "}
             <a className="text-brand hover:underline" href={href(paths.agent(head.id))}>

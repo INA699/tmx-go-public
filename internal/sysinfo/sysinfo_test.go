@@ -100,8 +100,8 @@ func psState(t *testing.T, pid int) string {
 
 // TestSuspendChild pauses and resumes a child process tree this test started itself.
 func TestSuspendChild(t *testing.T) {
-	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
-		t.Skip("requires identity-pinned Unix process control")
+	if runtime.GOOS != "linux" {
+		t.Skip("requires identity-pinned Linux process control")
 	}
 	cmd := hiddenexec.Command("/bin/sh", "-c", "sleep 30 & wait")
 	cmd.Dir = t.TempDir()
@@ -143,8 +143,8 @@ func TestSuspendChild(t *testing.T) {
 }
 
 func TestSuspendRefusesStrangers(t *testing.T) {
-	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" {
-		t.Skip("requires identity-pinned Unix process control")
+	if runtime.GOOS != "linux" {
+		t.Skip("requires identity-pinned Linux process control")
 	}
 	// PID 1 is never our child: nothing may be signalled.
 	if _, err := SuspendTree(1, true); !errors.Is(err, ErrNotChild) {

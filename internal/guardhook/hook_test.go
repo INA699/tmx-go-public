@@ -47,8 +47,7 @@ func TestAllowIsSilentBlockIsDenied(t *testing.T) {
 		t.Fatalf("allowed write answered: %+v", dec)
 	}
 	dec := run(t, o, input("Bash", map[string]any{"command": "pkill node"}))
-	// kill-by-name is blocked by default, and node is also the fixed carve-out: either may be named.
-	if dec == nil || dec.PermissionDecision != "deny" || !strings.Contains(dec.PermissionDecisionReason, "processes by name") {
+	if dec == nil || dec.PermissionDecision != "deny" || !strings.Contains(dec.PermissionDecisionReason, "Kill tmx's own processes by name") { // node: the fixed carve-out
 		t.Fatalf("block: %+v", dec)
 	}
 	tl, _ := d.Fleet.Timeline("head", 0, 100)

@@ -133,7 +133,7 @@ func TestProcessTurnWithApproval(t *testing.T) {
 }
 
 func TestProcessArgsAndResume(t *testing.T) {
-	w := startFake(t, runner.Spec{Model: "m1", SessionID: "old-sid", AllowedTools: []string{"mcp__tmx"}})
+	w := startFake(t, runner.Spec{Model: "m1", SessionID: "old-sid", AllowedTools: []string{"mcp__tmxg"}})
 	w.until("state:idle")
 	if err := w.proc.Send("args"); err != nil {
 		t.Fatal(err)
@@ -144,7 +144,7 @@ func TestProcessArgsAndResume(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(args, " ")
-	for _, want := range []string{"-p", "--permission-prompt-tool stdio", "--model m1", "--resume old-sid", "--allowedTools=mcp__tmx"} {
+	for _, want := range []string{"-p", "--permission-prompt-tool stdio", "--model m1", "--resume old-sid", "--allowedTools=mcp__tmxg"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("argv %q lacks %q", joined, want)
 		}

@@ -42,6 +42,7 @@ import { SettingsPage } from "@/pages/settings";
 import { MatrixPage } from "@/pages/matrix";
 import { WhatsAppPage } from "@/pages/whatsapp";
 import { UsagePage } from "@/pages/usage";
+import { FeaturesPage } from "@/pages/features";
 import { waSendShownAt } from "@/lib/whatsapp";
 import { PairDevice } from "@/components/device-pairing";
 import { BrandMark } from "@/components/brand-mark";
@@ -73,6 +74,8 @@ function Routes() {
       return <WhatsAppPage jid={r.jid} />;
     case "companion":
       return <CompanionPage />;
+    case "features":
+      return <FeaturesPage />;
     case "usage":
       return <UsagePage />;
     default:
@@ -97,7 +100,7 @@ function MobileBar() {
         <Menu className="size-4" />
       </Button>
       <BrandMark className="ml-0.5" />
-      <span className="truncate text-[0.8125rem] font-semibold">{machine || "Tiamatrix"}</span>
+      <span className="truncate text-[0.8125rem] font-semibold">{machine || "tmx"}</span>
       <ReconnectingPill className="ml-1" />
       <div className="ml-auto flex items-center gap-0.5">
         <Button variant="ghost" size="icon-sm" aria-label="Search" onClick={() => ui.openPalette(true)}>
@@ -185,7 +188,7 @@ function Blocked({ kind }: { kind: "unauthorized" | "offline" }) {
       ) : (
         <EmptyState
           icon={PlugZap}
-          title="Can't reach the Tiamatrix daemon"
+          title="Can't reach the tmx daemon"
           className="w-full max-w-md"
           actions={
             <Button variant="outline" size="sm" onClick={retryNow}>

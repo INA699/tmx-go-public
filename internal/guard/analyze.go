@@ -550,7 +550,7 @@ func (a *analyzer) unwrap(verb string, args []arg, raw string, sh Shell) ([]arg,
 		return skip(wrapperValues[verb]), true
 	case "tmx", "tmxg":
 		// `tmx slot [--kind k] -- cmd ...` only waits for a heavy-command slot, then runs cmd: the
-		// guard checks cmd, not tmx (agents use it for builds and tests).
+		// guard checks cmd, not tmx (Hostb's log, 3 Nov: agents use it for builds and tests).
 		if len(rest) > 0 && strings.EqualFold(rest[0].s, "slot") {
 			for i, x := range rest {
 				if x.s == "--" {

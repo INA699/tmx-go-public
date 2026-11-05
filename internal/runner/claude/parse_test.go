@@ -180,14 +180,14 @@ func TestToolResultTruncated(t *testing.T) {
 func TestArgs(t *testing.T) {
 	spec := runner.Spec{
 		Model: "claude-sonnet-5-5", SessionID: "sid", PermissionMode: "auto",
-		MCPConfigPath: "/x/mcp.json", AllowedTools: []string{"mcp__tmx", "Read"},
+		MCPConfigPath: "/x/mcp.json", AllowedTools: []string{"mcp__tmxg", "Read"},
 		DisallowedTools: []string{"Bash", "Edit"},
 		SystemPrompt:    "be brief", ExtraArgs: []string{"--verbose"},
 	}
 	got := strings.Join(ChatArgs(spec), " ")
 	want := "-p --input-format stream-json --output-format stream-json --verbose --permission-prompt-tool stdio " +
 		"--setting-sources  --model claude-sonnet-5-5 --resume sid --permission-mode auto --mcp-config=/x/mcp.json --strict-mcp-config " +
-		"--allowedTools=mcp__tmx,Read --disallowedTools=Bash,Edit --append-system-prompt be brief --verbose"
+		"--allowedTools=mcp__tmxg,Read --disallowedTools=Bash,Edit --append-system-prompt be brief --verbose"
 	if got != want {
 		t.Fatalf("\n got %s\nwant %s", got, want)
 	}

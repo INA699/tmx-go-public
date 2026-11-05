@@ -35,7 +35,7 @@ func TestWatchProbation(t *testing.T) {
 			}))
 			defer srv.Close()
 			dir := t.TempDir()
-			if err := rollback.BeginProbation(dir, "v1.0.0", "v1.1.0", t0); err != nil {
+			if err := rollback.BeginProbation(dir, "fleet-v1.0.0", "fleet-v1.1.0", t0); err != nil {
 				t.Fatal(err)
 			}
 			var clock atomic.Int64 // minutes after t0; each poll moves it on 4 minutes
@@ -87,7 +87,7 @@ func TestWatchProbationDrill(t *testing.T) {
 	if err := rollback.ArmDrill(dir); err != nil {
 		t.Fatal(err)
 	}
-	if err := rollback.BeginProbation(dir, "v1.0.0", "v1.1.0", time.Now()); err != nil {
+	if err := rollback.BeginProbation(dir, "fleet-v1.0.0", "fleet-v1.1.0", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	failed := false

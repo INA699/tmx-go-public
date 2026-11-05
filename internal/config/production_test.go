@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// Peer-to-peer answers the owner's own config (the pair-token fleet transport doesn't cover
+// Peer-to-peer answers the owner's own config (3 Nov: the pair-token fleet transport doesn't cover
 // person-to-person contacts/chats, which is what this is for); automatic updates stay off
 // regardless (no signed release path yet - a separate concern).
 func TestProductionProfileHonoursP2PKeepsUpdatesOff(t *testing.T) {
@@ -39,7 +39,7 @@ func TestProductionProfileDefaultsOff(t *testing.T) {
 	}
 }
 
-// A config seen in the field: production, p2p.enabled true, an explicit on-disk "dht":false
+// Hostb's exact config, 3 Nov: production, p2p.enabled true, an explicit on-disk "dht":false
 // left by older fillDefaults code (cfc7be0/PR #176, before production honoured the field at all)
 // - indistinguishable from a genuine owner choice by its bare presence, which is why
 // EffectiveDHT defaults it on anyway unless DHTExplicit says the owner really chose it.
@@ -102,11 +102,11 @@ func TestLoadProfiles(t *testing.T) {
 	}
 }
 
-// The port rule is the same in every profile: 8777 (Python tmx), 43911 and 4001 are never
-// listened on; 8777 is never a Host either, while DefaultPort may be (another local daemon).
+// The port rule is the same in every profile: 8777 (Python tmx) and 8787 (tmx-go v0.1) are
+// never listened on; 8787 may still be a Host, 8777 never.
 func TestPortRuleExplicit(t *testing.T) {
 	for _, profile := range []string{ProfileTrial, ProfileProduction} {
-		for _, port := range []int{PortPythonV2, 43911, 4001} {
+		for _, port := range []int{PortPythonV2, PortLegacyHTTP, 43911, 4001} {
 			p := testPaths(t)
 			t.Setenv(EnvPort, "")
 			b, _ := json.Marshal(map[string]any{"profile": profile, "port": port})
@@ -118,36 +118,10 @@ func TestPortRuleExplicit(t *testing.T) {
 			}
 		}
 	}
-	if ValidListenPort(PortPythonV2) || !ValidListenPort(DefaultPort) {
+	if ValidListenPort(PortPythonV2) || ValidListenPort(PortLegacyHTTP) || !ValidListenPort(DefaultPort) {
 		t.Fatal("ValidListenPort")
 	}
-	if ValidHostPort(PortPythonV2) || !ValidHostPort(DefaultPort) {
+	if ValidHostPort(PortPythonV2) || !ValidHostPort(PortLegacyHTTP) {
 		t.Fatal("ValidHostPort")
-	}
-}
-
-// Where peer-to-peer runs, mDNS and NAT port mapping default on, as in 0c36197; an owner's
-// explicit false is kept, and so is everything off outside production or with p2p disabled.
-func TestEffectiveMDNSAndNATPortMap(t *testing.T) {
-	on, off := true, false
-	for _, tc := range []struct {
-		name string
-		c    Config
-		want bool
-	}{
-		{"production, enabled, unset", Config{Profile: ProfileProduction, P2P: &P2PConfig{Enabled: &on}}, true},
-		{"production, enabled, owner's false", Config{Profile: ProfileProduction, P2P: &P2PConfig{Enabled: &on, MDNS: &off, NATPortMap: &off}}, false},
-		{"production, enabled, owner's false beside an owner's dht:false", Config{Profile: ProfileProduction, P2P: &P2PConfig{Enabled: &on, DHT: &off, DHTExplicit: true, MDNS: &off, NATPortMap: &off}}, false},
-		// Hostb's block: every value false from older fillDefaults code.
-		{"production, enabled, stale all-false block", Config{Profile: ProfileProduction, P2P: &P2PConfig{Enabled: &on, DHT: &off, MDNS: &off, NATPortMap: &off}}, true},
-		{"production, p2p disabled", Config{Profile: ProfileProduction, P2P: &P2PConfig{}}, false},
-		{"trial, enabled", Config{Profile: ProfileTrial, P2P: &P2PConfig{Enabled: &on}}, false},
-	} {
-		if got := tc.c.EffectiveMDNS(); got != tc.want {
-			t.Errorf("%s: EffectiveMDNS = %v, want %v", tc.name, got, tc.want)
-		}
-		if got := tc.c.EffectiveNATPortMap(); got != tc.want {
-			t.Errorf("%s: EffectiveNATPortMap = %v, want %v", tc.name, got, tc.want)
-		}
 	}
 }

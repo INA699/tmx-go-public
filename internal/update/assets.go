@@ -73,7 +73,7 @@ func (u *Updater) ReleaseByTag(ctx context.Context, tag string) (Release, error)
 		return Release{}, fmt.Errorf("reading release %s: %w", tag, err)
 	}
 	if r.TagName != tag {
-		return Release{}, fmt.Errorf("%w: mismatched tag", ErrNoRelease)
+		return Release{}, fmt.Errorf("%w: mismatched fleet tag", ErrNoRelease)
 	}
 	if r.Draft {
 		return Release{}, fmt.Errorf("%w %s in %s (it is a draft)", ErrNoRelease, tag, repo)
@@ -101,9 +101,8 @@ func (u *Updater) FetchSmall(ctx context.Context, a Asset, max int64) ([]byte, e
 	return b.buf, nil
 }
 
-// VerifySums checks an extra's SHA256SUMS (the owner's signature, or the pinned extra keys' with
-// the extras context, configured repo and expected tag) and returns its entries (file name →
-// lowercase hex SHA-256).
+// VerifySums checks SHA256SUMS with the extras context, configured repo, and expected tag, and
+// returns its entries (file name → lowercase hex SHA-256).
 func (u *Updater) VerifySums(tag string, sums, sig []byte) (map[string]string, error) {
 	keys, err := u.trustedKeys()
 	if err != nil {

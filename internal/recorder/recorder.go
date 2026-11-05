@@ -294,7 +294,7 @@ type BeginRequest struct {
 	Title       string `json:"title,omitempty"`
 	// Source: web (the default; chunks) or native (the macOS app writes the files; native.go).
 	Source model.RecordingSource `json:"source,omitempty"`
-	// Sensitivity: model.SensitivityLocalOnly for sensitive content (local models only), "" otherwise.
+	// Sensitivity: model.SensitivityClinic for patient data (local models only), "" otherwise.
 	Sensitivity string `json:"sensitivity,omitempty"`
 }
 
@@ -457,7 +457,7 @@ type closedPart struct {
 
 // closedLocked returns segment n-1 when chunk n created segment n of a web recording with sound
 // and automatic transcription, so the report is ready minutes after Stop and not a whole
-// recording's transcription later. nil otherwise.
+// recording's transcription later (the owner: "chunks of 5 min"). nil otherwise.
 func (s *Service) closedLocked(sess *session, n int, created bool) *closedPart {
 	if !created || n < 2 || sess.nat != nil || s.tr == nil || !hasSound(sess.rec) {
 		return nil
@@ -899,7 +899,7 @@ func (s *Service) Rename(id, title string) (model.Recording, error) {
 	return s.update(id, func(r *model.Recording) { r.Title = t })
 }
 
-// SetSensitivity tags a recording: model.SensitivityLocalOnly (sensitive: its report is written by local models
+// SetSensitivity tags a recording: model.SensitivityClinic (patient data: its report is written by local models
 // only) or "" (any model).
 func (s *Service) SetSensitivity(id, v string) (model.Recording, error) {
 	if err := validSensitivity(v); err != nil {
@@ -909,8 +909,8 @@ func (s *Service) SetSensitivity(id, v string) (model.Recording, error) {
 }
 
 func validSensitivity(v string) error {
-	if v != "" && v != model.SensitivityLocalOnly {
-		return invalid("sensitivity is %q or empty, not %q", model.SensitivityLocalOnly, v)
+	if v != "" && v != model.SensitivityClinic {
+		return invalid("sensitivity is %q or empty, not %q", model.SensitivityClinic, v)
 	}
 	return nil
 }

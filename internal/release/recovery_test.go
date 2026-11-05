@@ -5,12 +5,10 @@ import (
 	"encoding/base64"
 	"os"
 	"regexp"
-	"slices"
 	"strings"
 	"testing"
 
 	"github.com/blackcode-ch/tmx-go/internal/config"
-	"github.com/blackcode-ch/tmx-go/internal/update"
 )
 
 // PublicOf gives back exactly the key keygen printed and never the seed; a missing or corrupt key
@@ -42,9 +40,8 @@ func TestPublicOfMatchesKeygen(t *testing.T) {
 	}
 }
 
-// docs/RECOVERY.md is where an owner checks the release key: its public key must be a valid
-// ed25519 key built into this tmx and its fingerprint must be that key's, so a typo there is
-// caught here.
+// docs/RECOVERY.md is where an owner copies the fleet key from: its public key must be a valid
+// ed25519 pin and its fingerprint must be that key's, so a typo there is caught here.
 func TestRecoveryDocKeyMatchesItsFingerprint(t *testing.T) {
 	// The public mirror omits internal docs and marks its README explicitly.
 	// Missing or malformed recovery docs in a private checkout must still fail.
@@ -71,9 +68,6 @@ func TestRecoveryDocKeyMatchesItsFingerprint(t *testing.T) {
 	raw, _ := base64.StdEncoding.DecodeString(key[1])
 	if got := Fingerprint(ed25519.PublicKey(raw)); got != fp[1] {
 		t.Fatalf("fingerprint of the documented key is %s, the page says %s", got, fp[1])
-	}
-	if built := update.New(update.Options{}).Keys().ReleaseKeys; !slices.Contains(built, key[1]) {
-		t.Fatalf("the documented key is not built in (%v)", built)
 	}
 	// Every pin command and snippet on the page names the same key.
 	for _, m := range regexp.MustCompile(`fleet-release-v1:([A-Za-z0-9+/=]{44})|"key": "([A-Za-z0-9+/=]{44})"`).FindAllStringSubmatch(doc, -1) {

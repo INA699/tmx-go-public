@@ -81,8 +81,7 @@ type Confirmation struct {
 	Method      string `json:"method"`
 	MethodLabel string `json:"method_label"`
 	// PIN: the owner PIN answers it (POST /api/gate/confirmations/{id}/pin at the machine);
-	// Hello: the OS prompt (Windows Hello / Touch ID) is open for it. With both, Method is the
-	// OS method (the OS prompt first, the PIN the fallback); with the PIN alone it is "pin".
+	// Hello: the OS prompt (Windows Hello / Touch ID) is open for it too (#187).
 	PIN       bool  `json:"pin,omitempty"`
 	Hello     bool  `json:"hello,omitempty"`
 	CreatedAt int64 `json:"created_at"`
@@ -114,9 +113,8 @@ type Status struct {
 	GraceUntil   int64 `json:"grace_until,omitempty"`
 	GraceSteps   []int `json:"grace_steps"`
 	// PINSet: the owner PIN is set; it answers every confirmation, on every device (#187).
-	// HelloShortcut: the OS prompt (Windows Hello / Touch ID) is offered at this machine, first,
-	// with the PIN as the fallback (Settings > Safety; on unless the owner turned it off).
-	// Without a PIN the OS prompt is the only way in, whatever HelloShortcut says.
+	// HelloShortcut: the OS prompt is also offered at this machine (Settings > Safety). Without
+	// a PIN the OS prompt is the only way in, whatever HelloShortcut says.
 	PINSet        bool `json:"pin_set"`
 	HelloShortcut bool `json:"hello_shortcut"`
 }
@@ -175,9 +173,8 @@ type fileState struct {
 	// Grace is the grace window in minutes; missing = DefaultGrace, 0 = off. The open window
 	// itself is never written down (grace.go).
 	Grace *int `json:"grace_minutes,omitempty"`
-	// HelloShortcut: offer the OS prompt (Windows Hello / Touch ID) at this machine, the PIN
-	// being the fallback. Missing = on (the default, also for a new install); false = the owner
-	// (or a fleet build that wrote false at first start) chose the PIN alone.
+	// HelloShortcut: also offer the OS prompt (Windows Hello / Touch ID) at this machine. Missing
+	// in an existing gate.json (written before #187) = on, as it was; a new install writes off.
 	HelloShortcut *bool `json:"hello_shortcut,omitempty"`
 }
 
@@ -225,7 +222,7 @@ func New(paths config.Paths, auth Authenticator, log *slog.Logger, markers ...Ma
 			if absent && absenceErr == nil {
 				// Old never-enrolled versions also left gate.json absent. Persist
 				// the explicit choice without writing an enrolment marker.
-				if e := g.saveLocked(fileState{Enabled: false}); e != nil {
+				if e := g.saveLocked(fileState{Enabled: false, HelloShortcut: new(bool)}); e != nil {
 					log.Warn("gate: cannot initialize disabled state; treating the gate as on")
 				}
 			}
@@ -277,7 +274,7 @@ func (g *Gate) SetPINCheck(fn func() bool) {
 
 func (g *Gate) pinSetLocked() bool { return g.pinSet != nil && g.pinSet() }
 
-// helloShortcutLocked: the owner's choice; without one the OS prompt is offered (the default).
+// helloShortcutLocked: the owner's choice; an existing gate.json without it keeps the OS prompt.
 func (g *Gate) helloShortcutLocked() bool { return g.st.HelloShortcut == nil || *g.st.HelloShortcut }
 
 // HelloShortcut reports whether the OS prompt is offered at this machine besides the PIN.
@@ -357,7 +354,7 @@ func (g *Gate) statusLocked() Status {
 		// Method stays the OS method: for the UI, status method "pin" means a paired browser.
 		s.MethodLabel = "your owner PIN"
 		if s.HelloShortcut && g.auth.Available() == nil {
-			s.MethodLabel = g.auth.Label() + ", or your owner PIN"
+			s.MethodLabel = "your owner PIN or " + g.auth.Label()
 		}
 		s.Available = true
 		return s
@@ -496,11 +493,11 @@ func (g *Gate) Require(a Action, confirmID string) error {
 	c := &Confirmation{ID: newID(), Reason: a.Reason, State: StatePending, Method: g.auth.Method(),
 		MethodLabel: g.auth.Label(), PIN: pin, Hello: hello, CreatedAt: now.UnixMilli(), key: a.Key, caller: a.Caller,
 		ui: a.UI && a.Owner, done: make(chan struct{}), cancel: cancel}
-	switch {
-	case pin && hello: // the OS prompt first, the PIN the fallback
-		c.MethodLabel = g.auth.Label() + ", or your owner PIN"
-	case pin:
+	if pin {
 		c.Method, c.MethodLabel = "pin", "your owner PIN"
+		if hello {
+			c.MethodLabel = "your owner PIN or " + g.auth.Label()
+		}
 	}
 	g.confs[c.ID] = c
 	g.log.Info("gate: asking the owner", "id", c.ID, "reason", a.Reason)

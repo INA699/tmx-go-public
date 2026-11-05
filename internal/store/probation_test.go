@@ -33,7 +33,7 @@ func probationSetup(t *testing.T) (path, binary, checkpoint string, t0 time.Time
 	if err := rollback.MarkUpdate(checkpoint); err != nil {
 		t.Fatal(err)
 	}
-	if err := rollback.BeginProbation(checkpoint, "v1.0.0", "v1.1.0", t0); err != nil {
+	if err := rollback.BeginProbation(checkpoint, "fleet-v1.0.0", "fleet-v1.1.0", t0); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(binary, []byte("new binary"), 0700); err != nil {
@@ -42,7 +42,7 @@ func probationSetup(t *testing.T) (path, binary, checkpoint string, t0 time.Time
 	saved, savedV := probationNow, probationVersion
 	t.Cleanup(func() { probationNow, probationVersion = saved, savedV })
 	probationNow = func() time.Time { return t0.Add(time.Minute) }
-	probationVersion = func() string { return "v1.1.0" } // the binary on probation
+	probationVersion = func() string { return "fleet-v1.1.0" } // the binary on probation
 	return
 }
 
@@ -79,7 +79,7 @@ func TestProbationConfirmedKeepsTheNewBinary(t *testing.T) {
 	if _, on, _ := rollback.OnProbation(checkpoint); on {
 		t.Fatal("still on probation after confirming")
 	}
-	if r, ok := rollback.LastProbation(checkpoint); !ok || r.Outcome != "confirmed" || r.To != "v1.1.0" {
+	if r, ok := rollback.LastProbation(checkpoint); !ok || r.Outcome != "confirmed" || r.To != "fleet-v1.1.0" {
 		t.Fatalf("result %+v", r)
 	}
 	// Later starts, even past the old deadline and the start limit, never roll back.
@@ -246,7 +246,7 @@ func TestManualInstallSupersedesTheProbation(t *testing.T) {
 	if err := os.WriteFile(binary, []byte("manual fix"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	probationVersion = func() string { return "v1.1.1-manual" }
+	probationVersion = func() string { return "fleet-v1.1.1-manual" }
 	probationNow = func() time.Time { return t0.Add(rollback.ProbationWindow + time.Hour) } // past the deadline
 	for i := 0; i < rollback.MaxProbationStarts+1; i++ {
 		if err := open(t, path, binary, checkpoint); err != nil {
@@ -272,10 +272,10 @@ func TestRestoredBinaryDoesNotRestoreAgain(t *testing.T) {
 	}
 	binaryIs(t, binary, "old binary")
 	// As if EndProbation had failed: the record is back.
-	if err := rollback.BeginProbation(checkpoint, "v1.0.0", "v1.1.0", t0); err != nil {
+	if err := rollback.BeginProbation(checkpoint, "fleet-v1.0.0", "fleet-v1.1.0", t0); err != nil {
 		t.Fatal(err)
 	}
-	probationVersion = func() string { return "v1.0.0" } // the restored binary
+	probationVersion = func() string { return "fleet-v1.0.0" } // the restored binary
 	if err := open(t, path, binary, checkpoint); err != nil {
 		t.Fatalf("the restored binary's start: %v", err)
 	}

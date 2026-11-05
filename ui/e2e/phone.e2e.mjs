@@ -43,7 +43,7 @@ test("phone-size pages load without a token loop", { timeout: 5 * 60_000 }, asyn
   }
 });
 
-// A phone report: installed as an app, it still had the browser's top/bottom bars — Chrome had
+// The owner's phone report (3 Nov): installed as an app, still had the browser's top/bottom bars — Chrome had
 // fallen back to a bookmark shortcut. This is the real proof it now installs as an app: Chrome's own
 // installability check (the same one behind the "Install app" prompt) reports no errors, and the manifest it
 // read back declares standalone display.

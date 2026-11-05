@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"strings"
 
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
@@ -88,17 +87,9 @@ func (s *Store) SetTimelineThread(agentID string, from, to int64, thread string)
 	return err
 }
 
-// boardTools are the tools whose input a board card summarises, by every name a stored
-// transcript may give them (model.TmxToolNames).
-var boardTools = func() []any {
-	var out []any
-	for _, t := range []string{"send", "report", "reply", "agent_launch", "project_create", "ask_owner", "thread_set"} {
-		for _, n := range model.TmxToolNames(t) {
-			out = append(out, n)
-		}
-	}
-	return out
-}()
+// boardTools are the tools whose input a board card summarises.
+var boardTools = []any{"mcp__tmxg__send", "mcp__tmxg__report", "mcp__tmxg__reply", "mcp__tmxg__agent_launch",
+	"mcp__tmxg__project_create", "mcp__tmxg__ask_owner", "mcp__tmxg__thread_set"}
 
 // BoardEntries returns what the board needs of an agent's timeline from seq `from` on, in
 // seq order: the entries that start, make up or end turns, with text cut to 2000 characters
@@ -108,7 +99,7 @@ func (s *Store) BoardEntries(agentID string, from int64) ([]model.TimelineEntry,
 	args = append(args, agentID, from, model.EntryUser, model.EntryMessageIn, model.EntryAssistant, model.EntryToolUse,
 		model.EntryResult, model.EntryError)
 	rows, err := s.db.Query(`SELECT seq, at, kind, substr(text, 1, 2000), tool,
-		CASE WHEN tool IN (`+strings.Repeat("?,", len(boardTools)-1)+`?) THEN substr(input, 1, 4000) END, is_error, meta, thread_id
+		CASE WHEN tool IN (?,?,?,?,?,?,?) THEN substr(input, 1, 4000) END, is_error, meta, thread_id
 		FROM timeline WHERE agent_id = ? AND seq >= ? AND kind IN (?,?,?,?,?,?) ORDER BY seq`, args...)
 	if err != nil {
 		return nil, err

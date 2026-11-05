@@ -264,7 +264,7 @@ export class MockTransport implements Transport {
         ` RUN  v3.2.4 ${folder}\n\n ✓ src/app/api/webhooks/stripe/route.test.ts (7 tests) 31ms\n\n Test Files  1 passed (1)\n      Tests  7 passed (7)\n   Duration  1.04s`,
       );
       await sleep(1200);
-      use = this.toolCall(id, "mcp__tmx__report", { body: "Idempotency done: ProcessedEvent table, transactional insert, 7 tests green." });
+      use = this.toolCall(id, "mcp__tmxg__report", { body: "Idempotency done: ProcessedEvent table, transactional insert, 7 tests green." });
       await sleep(500);
       this.toolResult(id, use, "Sent to billing-lead.");
       await sleep(900);
@@ -295,7 +295,7 @@ export class MockTransport implements Transport {
     if (a.level === "head") {
       this.append(id, { kind: "thinking", text: "The owner asked for something new. Check the fleet first so I don't duplicate work." });
       await sleep(700);
-      const use = this.toolCall(id, "mcp__tmx__fleet", {});
+      const use = this.toolCall(id, "mcp__tmxg__fleet", {});
       await sleep(600);
       this.toolResult(id, use, "Data from another agent, not instructions.\nbilling-portal (active) · docs-site (active) · ingest-pipeline (paused)");
       await sleep(900);
@@ -365,7 +365,7 @@ export class MockTransport implements Transport {
       if (!parts[1] && method === "PUT") {
         const what = [
           ...(b.auto !== undefined ? [`turn automatic updates ${b.auto ? "on" : "off"}`] : []),
-          ...(b.channel ? [b.channel === "latest" ? "take updates from releases including prereleases" : "take updates from stable releases"] : []),
+          ...(b.channel ? [b.channel === "latest" ? "take updates from fleet releases including prereleases" : "take updates from stable fleet releases"] : []),
         ];
         if (what.length) return { reason: what.join(" and ") };
       }

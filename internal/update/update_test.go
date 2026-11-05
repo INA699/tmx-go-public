@@ -76,8 +76,7 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 	return g
 }
 
-// publish adds a release with files, a SHA256SUMS over them and its signature by key in the
-// owner's format (scripts/release-sums.sh).
+// publish adds a release with files, a SHA256SUMS over them and its signature by key.
 func (g *fakeGitHub) publish(channel, tag string, key ed25519.PrivateKey, files map[string][]byte) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -92,16 +91,10 @@ func (g *fakeGitHub) publish(channel, tag string, key ed25519.PrivateKey, files 
 	g.files["SHA256SUMS"] = []byte(sums.String())
 	r.Assets = append(r.Assets, asset{Name: "SHA256SUMS", URL: g.srv.URL + "/assets/SHA256SUMS"})
 	if key != nil {
-		g.files["SHA256SUMS.sig"] = signOwner(key, []byte(sums.String()))
+		g.files["SHA256SUMS.sig"] = []byte(FleetKeyID + ":" + base64.StdEncoding.EncodeToString(ed25519.Sign(key, signatureMessage(FleetSignatureContext, "o/r", tag, []byte(sums.String())))) + "\n")
 		r.Assets = append(r.Assets, asset{Name: "SHA256SUMS.sig", URL: g.srv.URL + "/assets/SHA256SUMS.sig"})
 	}
 	g.releases[channel] = r
-}
-
-// signOwner is SHA256SUMS.sig as scripts/release-sums.sh writes it: the base64 Ed25519 signature
-// of the exact SHA256SUMS bytes and a newline.
-func signOwner(key ed25519.PrivateKey, sums []byte) []byte {
-	return []byte(base64.StdEncoding.EncodeToString(ed25519.Sign(key, sums)) + "\n")
 }
 
 func newKey(t *testing.T) (ed25519.PrivateKey, string) {
@@ -177,12 +170,12 @@ func writeExe(t *testing.T, path, version string) {
 }
 
 func TestVersions(t *testing.T) {
-	for _, s := range []string{"v0.1.0-dev", "185f95f-dirty", "v0.1.1-dirty", "0.1.1", "dev", "v1.2", "v1.2.3-rc0", "v1.2.3-rc", "v1.2.3-RC1", "v1.2.3-rc01", "v1.2.3-beta1", "v1.2.3-rc1-dirty"} {
+	for _, s := range []string{"fleet-v0.1.0-dev", "185f95f-dirty", "fleet-v0.1.1-dirty", "0.1.1", "dev", "fleet-v1.2", "fleet-v1.2.3-rc0", "fleet-v1.2.3-rc", "fleet-v1.2.3-RC1", "fleet-v1.2.3-rc01", "fleet-v1.2.3-beta1", "fleet-v1.2.3-rc1-dirty"} {
 		if _, ok := ParseVersion(s); ok {
 			t.Errorf("%q parsed as a release", s)
 		}
 	}
-	order := []string{"v0.1.0", "v0.1.1", "v0.1.1-3-g185f95f", "v0.1.1-12-gabcdef0", "v0.2.0-rc1", "v0.2.0-rc1-2-gabcdef0", "v0.2.0-rc2", "v0.2.0-rc10", "v0.2.0", "v0.2.0-1-gabcdef0", "v1.0.0-rc1", "v1.0.0"}
+	order := []string{"fleet-v0.1.0", "fleet-v0.1.1", "fleet-v0.1.1-3-g185f95f", "fleet-v0.1.1-12-gabcdef0", "fleet-v0.2.0-rc1", "fleet-v0.2.0-rc1-2-gabcdef0", "fleet-v0.2.0-rc2", "fleet-v0.2.0-rc10", "fleet-v0.2.0", "fleet-v0.2.0-1-gabcdef0", "fleet-v1.0.0-rc1", "fleet-v1.0.0"}
 	for i := 1; i < len(order); i++ {
 		a, _ := ParseVersion(order[i-1])
 		b, ok := ParseVersion(order[i])
@@ -194,27 +187,27 @@ func TestVersions(t *testing.T) {
 
 // The updater orders rc tags as the signer does (internal/release.Version: rcN < final).
 func TestVersionRC(t *testing.T) {
-	v, ok := ParseVersion("v1.2.3-rc4")
-	if !ok || v.RC != 4 || !v.Prerelease() || v.String() != "v1.2.3-rc4" {
+	v, ok := ParseVersion("fleet-v1.2.3-rc4")
+	if !ok || v.RC != 4 || !v.Prerelease() || v.String() != "fleet-v1.2.3-rc4" {
 		t.Fatalf("%+v %v", v, ok)
 	}
-	if f, _ := ParseVersion("v1.2.3"); f.Prerelease() || !v.Less(f) || f.Less(v) {
+	if f, _ := ParseVersion("fleet-v1.2.3"); f.Prerelease() || !v.Less(f) || f.Less(v) {
 		t.Fatal("rc not below its release")
 	}
-	if a, _ := ParseVersion("v1.2.3-rc4"); a.Less(v) || v.Less(a) {
+	if a, _ := ParseVersion("fleet-v1.2.3-rc4"); a.Less(v) || v.Less(a) {
 		t.Fatal("equal versions ordered")
 	}
 }
 
 func TestTargets(t *testing.T) {
 	sep := string(filepath.Separator)
-	app := filepath.Join(sep+"Applications", "tmx.app", "Contents", "MacOS", "tmx")
+	app := filepath.Join(sep+"Applications", "tmxg.app", "Contents", "MacOS", "tmxg")
 	tg, err := detectTarget(app, true, "darwin", "arm64")
 	if got := tg.executable(tg.path); got != app {
 		t.Fatalf("bundle executable: %s, want %s", got, app)
 	}
-	if err != nil || !tg.bundle || tg.path != filepath.Join(sep+"Applications", "tmx.app") || tg.asset("v1.0.0") != "tmx-desktop_v1.0.0_darwin_arm64.app.zip" {
-		t.Fatalf("bundle: %+v %v %s", tg, err, tg.asset("v1.0.0"))
+	if err != nil || !tg.bundle || tg.path != filepath.Join(sep+"Applications", "tmxg.app") || tg.asset("fleet-v1.0.0") != "tmxg-desktop_fleet-v1.0.0_darwin_arm64.app.zip" {
+		t.Fatalf("bundle: %+v %v %s", tg, err, tg.asset("fleet-v1.0.0"))
 	}
 	if _, err := detectTarget("/usr/local/bin/tmx", true, "darwin", "arm64"); err == nil {
 		t.Fatal("a desktop build outside a bundle was accepted")
@@ -224,13 +217,13 @@ func TestTargets(t *testing.T) {
 		desk bool
 		want string
 	}{
-		{"windows", true, "tmx-desktop_v1.0.0_windows_amd64.exe"},
-		{"windows", false, "tmx_v1.0.0_windows_amd64.exe"},
-		{"linux", false, "tmx_v1.0.0_linux_amd64"},
-		{"darwin", false, "tmx_v1.0.0_darwin_amd64"},
+		{"windows", true, "tmxg-desktop_fleet-v1.0.0_windows_amd64.exe"},
+		{"windows", false, "tmxg_fleet-v1.0.0_windows_amd64.exe"},
+		{"linux", false, "tmxg_fleet-v1.0.0_linux_amd64"},
+		{"darwin", false, "tmxg_fleet-v1.0.0_darwin_amd64"},
 	} {
 		tg, _ := detectTarget("/x/tmx", c.desk, c.goos, "amd64")
-		if got := tg.asset("v1.0.0"); got != c.want {
+		if got := tg.asset("fleet-v1.0.0"); got != c.want {
 			t.Errorf("%s desktop=%v: %s, want %s", c.goos, c.desk, got, c.want)
 		}
 	}
@@ -239,23 +232,23 @@ func TestTargets(t *testing.T) {
 func TestInstallsWhenIdle(t *testing.T) {
 	g := newFakeGitHub(t)
 	key, pub := newKey(t)
-	g.publish("stable", "v0.2.0", key, map[string][]byte{"tmx_v0.2.0_linux_amd64": []byte("binary v0.2.0")})
+	g.publish("stable", "fleet-v0.2.0", key, map[string][]byte{"tmxg_fleet-v0.2.0_linux_amd64": []byte("binary fleet-v0.2.0")})
 	exe := filepath.Join(t.TempDir(), "bin", "tmx")
-	writeExe(t, exe, "v0.1.1")
-	h := newHarness(t, g, pub, "v0.1.1", exe, "linux", false)
+	writeExe(t, exe, "fleet-v0.1.1")
+	h := newHarness(t, g, pub, "fleet-v0.1.1", exe, "linux", false)
 	var mu sync.Mutex
 	busy := []string{"fx-media"}
 	h.busy = func() []string { mu.Lock(); defer mu.Unlock(); return busy }
 
 	s := h.u.checkRelease(context.Background(), true)
-	if !s.Available || s.Latest != "v0.2.0" {
+	if !s.Available || s.Latest != "fleet-v0.2.0" {
 		t.Fatalf("check: %+v", s)
 	}
 	s = waitState(t, h.u, StateReady)
 	if len(s.Waiting) != 1 || s.Waiting[0] != "fx-media" {
 		t.Fatalf("waiting: %+v", s)
 	}
-	if b, _ := os.ReadFile(exe); string(b) != "binary v0.1.1" {
+	if b, _ := os.ReadFile(exe); string(b) != "binary fleet-v0.1.1" {
 		t.Fatal("installed while an agent was busy")
 	}
 	mu.Lock()
@@ -269,22 +262,22 @@ func TestInstallsWhenIdle(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatalf("no install: %+v", h.u.Status())
 	}
-	if b, _ := os.ReadFile(exe); string(b) != "binary v0.2.0" {
+	if b, _ := os.ReadFile(exe); string(b) != "binary fleet-v0.2.0" {
 		t.Fatalf("exe after install: %q", b)
 	}
 	// The payload above is a fixture, not a native executable; Windows has no execute mode bit.
 	if fi, err := os.Stat(exe); err != nil || !fi.Mode().IsRegular() || (runtime.GOOS != "windows" && fi.Mode().Perm()&0o100 == 0) {
 		t.Fatalf("installed file: %v %v", fi, err)
 	}
-	if m, _ := filepath.Glob(filepath.Join(filepath.Dir(exe), ".tmx-update-*")); len(m) != 0 {
+	if m, _ := filepath.Glob(filepath.Join(filepath.Dir(exe), ".tmxg-update-*")); len(m) != 0 {
 		t.Fatalf("leftovers: %v", m)
 	}
 	// The new binary starts on probation: confirm healthy within the window or be rolled back.
 	p, on, err := rollback.OnProbation(filepath.Join(h.u.o.Paths.Home, "rollback"))
-	if err != nil || !on || p.From != "v0.1.1" || p.To != "v0.2.0" || p.Starts != 0 {
+	if err != nil || !on || p.From != "fleet-v0.1.1" || p.To != "fleet-v0.2.0" || p.Starts != 0 {
 		t.Fatalf("probation %+v %v %v", p, on, err)
 	}
-	if st := h.u.Status(); st.Probation != "v0.2.0" {
+	if st := h.u.Status(); st.Probation != "fleet-v0.2.0" {
 		t.Fatalf("status probation %q", st.Probation)
 	}
 }
@@ -292,10 +285,10 @@ func TestInstallsWhenIdle(t *testing.T) {
 func TestInstallNowDoesNotWait(t *testing.T) {
 	g := newFakeGitHub(t)
 	key, pub := newKey(t)
-	g.publish("stable", "v0.2.0", key, map[string][]byte{"tmx_v0.2.0_windows_amd64.exe": []byte("binary v0.2.0")})
+	g.publish("stable", "fleet-v0.2.0", key, map[string][]byte{"tmxg_fleet-v0.2.0_windows_amd64.exe": []byte("binary fleet-v0.2.0")})
 	exe := filepath.Join(t.TempDir(), "tmx.exe")
-	writeExe(t, exe, "v0.1.1")
-	h := newHarness(t, g, pub, "v0.1.1", exe, "windows", false)
+	writeExe(t, exe, "fleet-v0.1.1")
+	h := newHarness(t, g, pub, "fleet-v0.1.1", exe, "windows", false)
 	h.busy = func() []string { return []string{"always-busy"} }
 	h.mu.Lock()
 	off := false
@@ -310,7 +303,7 @@ func TestInstallNowDoesNotWait(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatalf("no install: %+v", h.u.Status())
 	}
-	if b, _ := os.ReadFile(exe); string(b) != "binary v0.2.0" {
+	if b, _ := os.ReadFile(exe); string(b) != "binary fleet-v0.2.0" {
 		t.Fatalf("exe: %q", b)
 	}
 	if m, _ := filepath.Glob(exe + ".old-*"); len(m) != 1 { // Windows: the running exe moves aside
@@ -323,7 +316,7 @@ func TestInstallNowDoesNotWait(t *testing.T) {
 	if err := rollback.Restore(filepath.Join(h.u.o.Paths.Home, "rollback"), exe, h.u.o.Paths.DB()); err != nil {
 		t.Fatal(err)
 	}
-	if b, _ := os.ReadFile(exe); string(b) != "binary v0.1.1" {
+	if b, _ := os.ReadFile(exe); string(b) != "binary fleet-v0.1.1" {
 		t.Fatalf("retained N-1 binary: %q", b)
 	}
 }
@@ -331,10 +324,10 @@ func TestInstallNowDoesNotWait(t *testing.T) {
 func TestSnapshotFailurePreventsInstall(t *testing.T) {
 	g := newFakeGitHub(t)
 	key, pub := newKey(t)
-	g.publish("stable", "v0.2.0", key, map[string][]byte{"tmx_v0.2.0_windows_amd64.exe": []byte("binary v0.2.0")})
+	g.publish("stable", "fleet-v0.2.0", key, map[string][]byte{"tmxg_fleet-v0.2.0_windows_amd64.exe": []byte("binary fleet-v0.2.0")})
 	exe := filepath.Join(t.TempDir(), "tmx.exe")
-	writeExe(t, exe, "v0.1.1")
-	h := newHarness(t, g, pub, "v0.1.1", exe, "windows", false)
+	writeExe(t, exe, "fleet-v0.1.1")
+	h := newHarness(t, g, pub, "fleet-v0.1.1", exe, "windows", false)
 	h.mu.Lock()
 	off := false
 	h.settings.Auto = &off
@@ -350,7 +343,7 @@ func TestSnapshotFailurePreventsInstall(t *testing.T) {
 	if !strings.Contains(s.Error, "cannot prepare rollback") {
 		t.Fatalf("error %s", s.Error)
 	}
-	if b, _ := os.ReadFile(exe); string(b) != "binary v0.1.1" {
+	if b, _ := os.ReadFile(exe); string(b) != "binary fleet-v0.1.1" {
 		t.Fatalf("binary changed: %q", b)
 	}
 	select {
@@ -365,20 +358,20 @@ func TestRefusesBadReleases(t *testing.T) {
 	other, _ := newKey(t)
 	cases := map[string]func(g *fakeGitHub){
 		"wrong key": func(g *fakeGitHub) {
-			g.publish("stable", "v0.2.0", other, map[string][]byte{"tmx_v0.2.0_linux_amd64": []byte("binary v0.2.0")})
+			g.publish("stable", "fleet-v0.2.0", other, map[string][]byte{"tmxg_fleet-v0.2.0_linux_amd64": []byte("binary fleet-v0.2.0")})
 		},
 		"unsigned": func(g *fakeGitHub) {
-			g.publish("stable", "v0.2.0", nil, map[string][]byte{"tmx_v0.2.0_linux_amd64": []byte("binary v0.2.0")})
+			g.publish("stable", "fleet-v0.2.0", nil, map[string][]byte{"tmxg_fleet-v0.2.0_linux_amd64": []byte("binary fleet-v0.2.0")})
 		},
 		"tampered file": func(g *fakeGitHub) {
-			g.publish("stable", "v0.2.0", key, map[string][]byte{"tmx_v0.2.0_linux_amd64": []byte("binary v0.2.0")})
-			g.files["tmx_v0.2.0_linux_amd64"] = []byte("binary v0.2.0 evil")
+			g.publish("stable", "fleet-v0.2.0", key, map[string][]byte{"tmxg_fleet-v0.2.0_linux_amd64": []byte("binary fleet-v0.2.0")})
+			g.files["tmxg_fleet-v0.2.0_linux_amd64"] = []byte("binary fleet-v0.2.0 evil")
 		},
 		"lies about its version": func(g *fakeGitHub) {
-			g.publish("stable", "v0.2.0", key, map[string][]byte{"tmx_v0.2.0_linux_amd64": []byte("binary v0.1.9")})
+			g.publish("stable", "fleet-v0.2.0", key, map[string][]byte{"tmxg_fleet-v0.2.0_linux_amd64": []byte("binary fleet-v0.1.9")})
 		},
 		"no build for this machine": func(g *fakeGitHub) {
-			g.publish("stable", "v0.2.0", key, map[string][]byte{"tmx_v0.2.0_linux_arm64": []byte("binary v0.2.0")})
+			g.publish("stable", "fleet-v0.2.0", key, map[string][]byte{"tmxg_fleet-v0.2.0_linux_arm64": []byte("binary fleet-v0.2.0")})
 		},
 	}
 	for name, setup := range cases {
@@ -386,8 +379,8 @@ func TestRefusesBadReleases(t *testing.T) {
 			g := newFakeGitHub(t)
 			setup(g)
 			exe := filepath.Join(t.TempDir(), "tmx")
-			writeExe(t, exe, "v0.1.1")
-			h := newHarness(t, g, pub, "v0.1.1", exe, "linux", false)
+			writeExe(t, exe, "fleet-v0.1.1")
+			h := newHarness(t, g, pub, "fleet-v0.1.1", exe, "linux", false)
 			h.u.checkRelease(context.Background(), true)
 			s := waitState(t, h.u, StateError)
 			if s.Error == "" {
@@ -398,10 +391,10 @@ func TestRefusesBadReleases(t *testing.T) {
 				t.Fatal("restarted")
 			case <-time.After(100 * time.Millisecond):
 			}
-			if b, _ := os.ReadFile(exe); string(b) != "binary v0.1.1" {
+			if b, _ := os.ReadFile(exe); string(b) != "binary fleet-v0.1.1" {
 				t.Fatalf("exe changed: %q", b)
 			}
-			if m, _ := filepath.Glob(filepath.Join(filepath.Dir(exe), ".tmx-update-*")); len(m) != 0 {
+			if m, _ := filepath.Glob(filepath.Join(filepath.Dir(exe), ".tmxg-update-*")); len(m) != 0 {
 				t.Fatalf("leftovers: %v", m)
 			}
 			t.Logf("%s: %s", name, s.Error)
@@ -428,13 +421,13 @@ func zipBundle(t *testing.T, files map[string]string) []byte {
 func TestInstallsBundle(t *testing.T) {
 	g := newFakeGitHub(t)
 	key, pub := newKey(t)
-	g.publish("stable", "v0.2.0", key, map[string][]byte{"tmx-desktop_v0.2.0_darwin_amd64.app.zip": zipBundle(t, map[string]string{
-		"tmx.app/Contents/MacOS/tmx": "binary v0.2.0", "tmx.app/Contents/Info.plist": "<plist/>",
+	g.publish("stable", "fleet-v0.2.0", key, map[string][]byte{"tmxg-desktop_fleet-v0.2.0_darwin_amd64.app.zip": zipBundle(t, map[string]string{
+		"tmxg.app/Contents/MacOS/tmxg": "binary fleet-v0.2.0", "tmxg.app/Contents/Info.plist": "<plist/>",
 	})})
 	apps := filepath.Join(t.TempDir(), "Applications")
-	exe := filepath.Join(apps, "tmx.app", "Contents", "MacOS", "tmx")
-	writeExe(t, exe, "v0.1.1")
-	h := newHarness(t, g, pub, "v0.1.1", exe, "darwin", true)
+	exe := filepath.Join(apps, "tmxg.app", "Contents", "MacOS", "tmxg")
+	writeExe(t, exe, "fleet-v0.1.1")
+	h := newHarness(t, g, pub, "fleet-v0.1.1", exe, "darwin", true)
 	h.u.checkRelease(context.Background(), true)
 	select {
 	case got := <-h.restarts:
@@ -444,15 +437,15 @@ func TestInstallsBundle(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatalf("no install: %+v", h.u.Status())
 	}
-	if b, _ := os.ReadFile(exe); string(b) != "binary v0.2.0" {
+	if b, _ := os.ReadFile(exe); string(b) != "binary fleet-v0.2.0" {
 		t.Fatalf("bundle exe: %q", b)
 	}
-	if _, err := os.Stat(filepath.Join(apps, "tmx.app", "Contents", "Info.plist")); err != nil {
+	if _, err := os.Stat(filepath.Join(apps, "tmxg.app", "Contents", "Info.plist")); err != nil {
 		t.Fatal(err)
 	}
 	cleanup(h.u.target)
 	entries, _ := os.ReadDir(apps)
-	if len(entries) != 1 || entries[0].Name() != "tmx.app" {
+	if len(entries) != 1 || entries[0].Name() != "tmxg.app" {
 		t.Fatalf("Applications holds %v", entries)
 	}
 }
@@ -460,8 +453,8 @@ func TestInstallsBundle(t *testing.T) {
 func TestBadZipIsRefused(t *testing.T) {
 	dir := t.TempDir()
 	for name, files := range map[string]map[string]string{
-		"escapes":  {"tmx.app/Contents/MacOS/tmx": "x", "../evil": "x"},
-		"not app":  {"tmx/Contents/MacOS/tmx": "x"},
+		"escapes":  {"tmxg.app/Contents/MacOS/tmxg": "x", "../evil": "x"},
+		"not app":  {"tmx/Contents/MacOS/tmxg": "x"},
 		"two apps": {"a.app/x": "x", "b.app/x": "x"},
 	} {
 		z := filepath.Join(dir, name+".zip")
@@ -478,9 +471,9 @@ func TestUnzipSkipsAppleDouble(t *testing.T) {
 	dir := t.TempDir()
 	z := filepath.Join(dir, "app.zip")
 	os.WriteFile(z, zipBundle(t, map[string]string{
-		"tmx.app/Contents/MacOS/tmx": "binary", "tmx.app/Contents/MacOS/._tmx": "attrs",
-		"tmx.app/Contents/._Info.plist": "attrs", "tmx.app/._Contents": "attrs",
-		"__MACOSX/tmx.app/._x": "attrs", "tmx.app/Contents/Info.plist": "plist",
+		"tmxg.app/Contents/MacOS/tmxg": "binary", "tmxg.app/Contents/MacOS/._tmx": "attrs",
+		"tmxg.app/Contents/._Info.plist": "attrs", "tmxg.app/._Contents": "attrs",
+		"__MACOSX/tmxg.app/._x": "attrs", "tmxg.app/Contents/Info.plist": "plist",
 	}), 0o600)
 	app, err := unzipBundle(z, filepath.Join(dir, "out"))
 	if err != nil {
@@ -495,7 +488,7 @@ func TestUnzipSkipsAppleDouble(t *testing.T) {
 		return nil
 	})
 	sort.Strings(got)
-	if strings.Join(got, ",") != "Contents/Info.plist,Contents/MacOS/tmx" {
+	if strings.Join(got, ",") != "Contents/Info.plist,Contents/MacOS/tmxg" {
 		t.Fatalf("unpacked %v", got)
 	}
 }
@@ -504,10 +497,10 @@ func TestLatestChannelAndPrivateRepo(t *testing.T) {
 	g := newFakeGitHub(t)
 	key, pub := newKey(t)
 	g.private, g.token = true, "secret-token"
-	g.publish("latest", "v0.1.1-3-g185f95f", key, map[string][]byte{"tmx_v0.1.1-3-g185f95f_linux_amd64": []byte("binary v0.1.1-3-g185f95f")})
+	g.publish("latest", "fleet-v0.1.1-3-g185f95f", key, map[string][]byte{"tmxg_fleet-v0.1.1-3-g185f95f_linux_amd64": []byte("binary fleet-v0.1.1-3-g185f95f")})
 	exe := filepath.Join(t.TempDir(), "tmx")
-	writeExe(t, exe, "v0.1.1")
-	h := newHarness(t, g, pub, "v0.1.1", exe, "linux", false)
+	writeExe(t, exe, "fleet-v0.1.1")
+	h := newHarness(t, g, pub, "fleet-v0.1.1", exe, "linux", false)
 	h.mu.Lock()
 	h.settings.Channel, h.settings.Auto = "latest", new(bool)
 	h.mu.Unlock()
@@ -522,7 +515,7 @@ func TestLatestChannelAndPrivateRepo(t *testing.T) {
 		t.Fatalf("token file: %v %v", fi, err)
 	}
 	s = h.u.checkRelease(context.Background(), true)
-	if s.State != StateAvailable || s.Latest != "v0.1.1-3-g185f95f" || !s.HasToken || s.NeedsToken {
+	if s.State != StateAvailable || s.Latest != "fleet-v0.1.1-3-g185f95f" || !s.HasToken || s.NeedsToken {
 		t.Fatalf("latest channel: %+v", s)
 	}
 	if err := h.u.SetToken(""); err != nil || h.u.Status().HasToken {
@@ -538,7 +531,7 @@ func TestDevBuildsAndKeylessBuildsDoNotUpdate(t *testing.T) {
 	if s := newHarness(t, g, pub, "185f95f-dirty", exe, "linux", false).u.Check(context.Background()); s.State != StateOff || !strings.Contains(s.Reason, "development") {
 		t.Fatalf("dev: %+v", s)
 	}
-	u := New(Options{Version: "v0.1.1", Executable: exe, GOOS: "linux", GOARCH: "amd64", Keys: []string{}})
+	u := New(Options{Version: "fleet-v0.1.1", Executable: exe, GOOS: "linux", GOARCH: "amd64", Keys: []string{}})
 	if s := u.Check(context.Background()); s.State != StateOff || !strings.Contains(s.Reason, "release key") {
 		t.Fatalf("keyless: %+v", s)
 	}

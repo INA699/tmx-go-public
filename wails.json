@@ -1,7 +1,7 @@
 {
   "$schema": "https://wails.io/schemas/config.v2.json",
-  "name": "tmx",
-  "outputfilename": "tmx",
+  "name": "tmxg",
+  "outputfilename": "tmxg",
   "frontend:dir": "ui",
   "frontend:install": "pnpm install",
   "frontend:build": "pnpm build",
@@ -11,7 +11,7 @@
     "name": "blackcode"
   },
   "info": {
-    "productName": "Tiamatrix",
+    "productName": "tmxg",
     "comments": "Runs a tree of coding agents on this machine."
   }
 }

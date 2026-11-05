@@ -4,14 +4,14 @@
 # ever in this repository's CI. The release signer adds SHA256SUMS.sig afterwards, outside CI; tmx
 # installs accept the engine only with that signature (the fleet key, "extra" context, this repo).
 #
-# It runs when this file or the pin changes on fleet/main, or by hand. A release that already has
+# It runs when this file or the pin changes on main, or by hand. A release that already has
 # SHA256SUMS is never rebuilt (it may be signed); a new engine is a new pin. Never "Latest".
 name: whisper-engine
 
 on:
   workflow_dispatch:
   push:
-    branches: [fleet/main]
+    branches: [main]
     paths:
       - .github/workflows/whisper-engine.yml
       - internal/transcribe/engine.pin

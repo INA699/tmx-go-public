@@ -3,9 +3,8 @@ package api
 // The owner PIN (internal/ownerpin): ONE short code, the same on every machine and the same
 // as the Python daemon's, for every owner step a browser takes: approving an owner
 // confirmation, pairing a new device, a presence session. Agents never set, read, reset or
-// submit it: every route here is the owner's (ownerOnly) or a pairing browser's. The record
-// (salt + scrypt hash) never leaves the machine: no route returns it and no peer can push one,
-// so each machine's PIN is set at that machine.
+// submit it: every route here is the owner's (ownerOnly) or a pairing browser's, and the
+// record itself goes only to the fleet's own machines (peer routes, pair-token auth).
 //
 // Routes (the same names as Python's Ship 1):
 //   GET  /api/gate/pin                  owner: is a PIN set, how long this source must wait
@@ -16,14 +15,21 @@ package api
 //   POST /api/gate/approvals/{id}/pin   a paired browser: confirm one pending owner action
 //   POST /api/gate/browser/{id}         the same (the Go UI's older name)
 //   POST /api/pair/pin {pin}            a pairing browser: approve its own pairing
+//   GET/POST /api/gate/pin/record       peers only: the record, newest "set" wins
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/blackcode-ch/tmx-go/internal/ownerpin"
+)
+
+const (
+	pinSyncFirst = 30 * time.Second
+	pinSyncEvery = 5 * time.Minute
 )
 
 type pinSession struct{ start, last, pinAt time.Time }
@@ -64,16 +70,14 @@ func atMachine(r *http.Request) bool {
 	return ok && c.Owner && !c.Companion && c.AgentID == "" && localRequest(r) && validUISession(r.Header.Get(UISessionHeader))
 }
 
-// pinSource is who the per-source backoff counts against: one paired device, all pairing
-// browsers of a host together (a cookie is free to drop), or the local UI (every local client
-// together: its nonce is the client's choice, so it never makes a new source). All sources
-// also share the machine-wide count (ownerpin.GlobalFree), which survives a restart.
+// pinSource is who the backoff counts against: one paired device, all pairing browsers of a
+// host together (a cookie is free to drop), or the local UI.
 func pinSource(r *http.Request, device string) string {
 	switch {
 	case device != "":
 		return "browser:" + requestHost(r) + ":" + device
 	case localRequest(r):
-		return "local"
+		return "local:" + gateCaller(r)
 	default:
 		return "pair:" + requestHost(r)
 	}
@@ -174,12 +178,14 @@ func (s *Server) pinSet(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if _, err := s.pin.Set(req.PIN); err != nil {
+	rec, err := s.pin.Set(req.PIN)
+	if err != nil {
 		writeError(w, 503, "could not save the PIN")
 		return
 	}
 	s.pin.ClearBackoff()
 	s.deviceEvent("pin_set", "")
+	go s.pushPIN(context.Background(), rec)
 	writeJSON(w, 200, map[string]any{"set": true})
 }
 
@@ -302,4 +308,82 @@ func (s *Server) pairWithPIN(w http.ResponseWriter, r *http.Request) {
 	p.Approved = true
 	s.deviceEvent("pair_approved_pin", "")
 	writeJSON(w, 200, map[string]bool{"approved": true})
+}
+
+// ---- sync between the fleet's machines (newest "set" wins) ----
+
+type pinRecordBody struct {
+	Record *ownerpin.Record `json:"record"`
+}
+
+func (s *Server) peerPinRecord(w http.ResponseWriter, r *http.Request) {
+	if s.pin == nil {
+		writeJSON(w, 200, pinRecordBody{})
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, pinRecordBody{Record: s.pin.Record()})
+}
+
+func (s *Server) peerPinAdopt(w http.ResponseWriter, r *http.Request) {
+	var req pinRecordBody
+	if !decode(w, r, &req) {
+		return
+	}
+	if s.pin == nil || req.Record == nil {
+		writeError(w, 400, "no record")
+		return
+	}
+	ok, err := s.pin.Adopt(*req.Record)
+	if err != nil {
+		writeError(w, 400, "invalid PIN record")
+		return
+	}
+	if ok {
+		s.log.Info("owner PIN adopted from a peer", "peer", peerOf(r).name)
+	}
+	writeJSON(w, 200, map[string]bool{"adopted": ok})
+}
+
+func (s *Server) pushPIN(ctx context.Context, rec ownerpin.Record) {
+	if s.peers == nil {
+		return
+	}
+	for _, host := range s.peers.Names() {
+		if err := s.peers.Call(ctx, host, http.MethodPost, "/api/gate/pin/record", pinRecordBody{Record: &rec}, nil); err != nil {
+			s.log.Warn("owner PIN push failed (the peer pulls it within 5 min)", "peer", host, "err", err)
+		}
+	}
+}
+
+func (s *Server) pullPIN(ctx context.Context) {
+	if s.peers == nil || s.pin == nil {
+		return
+	}
+	for _, host := range s.peers.Names() {
+		var res pinRecordBody
+		if err := s.peers.Call(ctx, host, http.MethodGet, "/api/gate/pin/record", nil, &res); err != nil || res.Record == nil {
+			continue
+		}
+		if ok, _ := s.pin.Adopt(*res.Record); ok {
+			s.log.Info("owner PIN adopted from a peer", "peer", host)
+		}
+	}
+}
+
+func (s *Server) pinSyncLoop(ctx context.Context) {
+	if s.peers == nil || s.pin == nil || len(s.peers.Names()) == 0 {
+		return
+	}
+	t := time.NewTimer(pinSyncFirst)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			s.pullPIN(ctx)
+			t.Reset(pinSyncEvery)
+		}
+	}
 }

@@ -14,10 +14,9 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/config"
 )
 
-// Key rotation of the pinned extra keys (DESIGN.md "Updates", rotation; never the owner's release
-// keys, which only a new build changes): a release may carry KEYS, a signed rotation
+// Key rotation (DESIGN.md "Updates", rotation): a release may carry KEYS, a signed rotation
 // statement, and KEYS.sig. KEYS is JSON {repo, serial, fleet_keys, require}: the whole new pin set.
-// KEYS.sig has the extra keys' SHA256SUMS.sig format and rules (sign.go), over the context FleetKeysContext
+// KEYS.sig has SHA256SUMS.sig's format and rules (sign.go), over the context FleetKeysContext
 // (webauthn: FleetKeysWebAuthnContext), the repository and "keys-<serial>", then the exact KEYS
 // bytes. A daemon checks it with the keys it pins NOW and their require policy; a valid statement
 // with a serial above update.keys_serial replaces the pinned set before the release itself is
@@ -25,8 +24,7 @@ import (
 // serial not above the last applied one is ignored before its signature is checked (a replay, or
 // an old statement by a key dropped since); otherwise one that does not parse or verify, or moves
 // the serial more than maxSerialStep, refuses the whole release. The check and the save run under
-// keysMu, which the owner's re-pin holds too. With no extra key pinned (the default) a statement
-// is ignored.
+// keysMu, which the owner's re-pin holds too.
 
 // FleetKeysContext and FleetKeysWebAuthnContext separate rotation statements from releases.
 const (
@@ -83,9 +81,6 @@ func verifyKeys(repo string, keys, sig []byte, ks keySet) (KeysStatement, error)
 	if st.Repo != repo {
 		return KeysStatement{}, fmt.Errorf("KEYS is for %s, not %s", st.Repo, repo)
 	}
-	if len(st.FleetKeys) == 0 { // dropping every extra key is the owner's re-pin, not a statement
-		return KeysStatement{}, errors.New("KEYS: no key left pinned")
-	}
 	if _, err := (config.UpdateConfig{}).WithPins(st.FleetKeys, st.Require); err != nil {
 		return KeysStatement{}, fmt.Errorf("KEYS: %w", err)
 	}
@@ -121,11 +116,8 @@ func (u *Updater) applyKeys(ctx context.Context, r release) error {
 	if !ok || !okSig {
 		return fmt.Errorf("release %s has KEYS or KEYS.sig without the other", r.TagName)
 	}
-	if ks, err := u.trustedKeys(); err == nil && len(ks.keys) == 0 {
-		// A statement rotates the extra keys and is signed by one: with none pinned (the default)
-		// there is nothing it could verify against or replace. The release's own signature decides.
-		u.o.Logger.Info("update: rotation statement ignored: no extra release keys are pinned", "release", r.TagName)
-		return nil
+	if u.o.Keys != nil {
+		return errors.New("test keys are not rotated")
 	}
 	var keys, sig bytes.Buffer
 	if err := u.fetch(ctx, keysA, &keys, maxKeysFile); err != nil {
@@ -190,22 +182,20 @@ func (u *Updater) save(c config.UpdateConfig) error {
 	return u.o.Save(c)
 }
 
-// PinnedKeys is GET /api/update/keys: the owner's release keys built into this tmx, the pinned
-// extra keys (public keys only) and the last applied rotation serial; Error says why the pinned
-// set is invalid (updates are then off).
+// PinnedKeys is GET /api/update/keys: the pinned set (public keys only) and the last applied
+// rotation serial; Error says why the set is invalid (updates are then off).
 type PinnedKeys struct {
-	ReleaseKeys []string          `json:"release_keys"` // base64 Ed25519, keys.go
-	FleetKeys   []config.FleetKey `json:"fleet_keys"`
-	Require     []string          `json:"require"`
-	KeysSerial  uint64            `json:"keys_serial"`
-	Error       string            `json:"error,omitempty"`
+	FleetKeys  []config.FleetKey `json:"fleet_keys"`
+	Require    []string          `json:"require"`
+	KeysSerial uint64            `json:"keys_serial"`
+	Error      string            `json:"error,omitempty"`
 }
 
 // Keys returns the pinned set.
 func (u *Updater) Keys() PinnedKeys {
 	s := u.settings()
 	keys, require, err := s.PinnedKeys()
-	p := PinnedKeys{ReleaseKeys: append([]string{}, u.o.Keys...), FleetKeys: keys, Require: require, KeysSerial: s.KeysSerial}
+	p := PinnedKeys{FleetKeys: keys, Require: require, KeysSerial: s.KeysSerial}
 	if err != nil {
 		p.Error = err.Error()
 	}
@@ -215,10 +205,12 @@ func (u *Updater) Keys() PinnedKeys {
 	return p
 }
 
-// SetKeys replaces the pinned extra keys (the owner's re-pin; the API gates it); an empty set
-// drops them all, leaving the owner's release keys. The rotation serial is kept: a re-pin does not
-// make older statements valid again.
+// SetKeys replaces the pinned set (the owner's re-pin; the API gates it). The rotation serial is
+// kept: a re-pin does not make older statements valid again.
 func (u *Updater) SetKeys(keys []config.FleetKey, require []string) (PinnedKeys, error) {
+	if u.o.Keys != nil {
+		return PinnedKeys{}, errors.New("test keys are not re-pinned")
+	}
 	u.keysMu.Lock()
 	next, err := u.settings().WithPins(keys, require)
 	if err == nil {

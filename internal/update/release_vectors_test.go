@@ -48,15 +48,15 @@ func TestSprintS22ReleaseFailureVectors(t *testing.T) {
 			if err := os.WriteFile(tg.path, old, 0600); err != nil {
 				t.Fatal(err)
 			}
-			const version = "v0.2.0"
+			const version = "fleet-v0.2.0"
 			name := tg.asset(version)
-			payload := []byte("inert release fixture v0.2.0")
+			payload := []byte("inert release fixture fleet-v0.2.0")
 			sums := []byte(fmt.Sprintf("%x  %s\n", sha256.Sum256(payload), name))
 			signer := key
 			if tc.name == "wrong-key" {
 				signer = other
 			}
-			sig := signOwner(signer, sums)
+			sig := []byte(FleetKeyID + ":" + base64.StdEncoding.EncodeToString(ed25519.Sign(signer, signatureMessage(FleetSignatureContext, "blackcode-ch/tmx-go", version, sums))))
 			if tc.name == "modified-sums" {
 				sums = append(sums, '\n')
 			}
@@ -73,7 +73,7 @@ func TestSprintS22ReleaseFailureVectors(t *testing.T) {
 			}
 			fetches, probes := 0, 0
 			u := &Updater{o: Options{
-				Paths: config.Paths{Home: dir}, Version: "v0.1.0", Keys: []string{base64.StdEncoding.EncodeToString(key.Public().(ed25519.PublicKey))},
+				Paths: config.Paths{Home: dir}, Version: "fleet-v0.1.0", Keys: []string{base64.StdEncoding.EncodeToString(key.Public().(ed25519.PublicKey))},
 				GH: func() string { return "" },
 				HTTP: &http.Client{Transport: releaseVectorTransport(func(req *http.Request) (*http.Response, error) {
 					fetches++
@@ -136,14 +136,14 @@ func TestSprintS22ReleaseFailureVectors(t *testing.T) {
 				if platform == "bundle" {
 					tg.bundle = true
 					tg.goos = "darwin"
-					tg.path = filepath.Join("fixture", "tmx.app")
+					tg.path = filepath.Join("fixture", "tmxg.app")
 				}
 				s := staged{path: filepath.Join("fixture", "stage"), cleanup: filepath.Join("fixture", "staging-dir")}
 				files := map[string]string{tg.path: "old", s.path: "new"}
 				original := map[string]string{tg.path: "old", s.path: "new"}
 				old := tg.path + ".old-123"
 				if tg.bundle {
-					old = filepath.Join(filepath.Dir(tg.path), ".tmx.app.old-123")
+					old = filepath.Join(filepath.Dir(tg.path), ".tmxg.app.old-123")
 				}
 				calls, removed := 0, 0
 				injected := errors.New("injected rename failure")

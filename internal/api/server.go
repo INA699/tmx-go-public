@@ -156,6 +156,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	}
 	errc := make(chan error, 1)
 	go func() { errc <- hs.Serve(ln) }()
+	go s.pinSyncLoop(ctx) // ownerpin.go: the owner PIN from the fleet's other machines
 	select {
 	case err := <-errc:
 		return err

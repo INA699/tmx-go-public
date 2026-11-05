@@ -1,5 +1,5 @@
-// A report's key moments (the Python recorder's review_moments, ported: the owner points and highlights on
-// screen, and a report must show the screenshots that go with it): the stills taken because the screen
+// A report's key moments (the Python recorder's review_moments, ported; the owner, 3 Nov: he points and highlights
+// on screen, and the reports must show "the screenshots the OLD reports had"): the stills taken because the screen
 // changed (frame.key: a new page, a highlight, a drawing), the still just after each moment the transcript points
 // at something ("look at this", "here", in his languages), and the first still. At most MAX_MOMENTS, none within
 // MOMENT_GAP_MS of another; a spoken moment wins over a change, a change over the start. Pure: no imports.

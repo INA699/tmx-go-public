@@ -91,4 +91,4 @@ jobs:
       - run: make deps
       - name: make app (unsigned)
         run: make app WAILS="$WAILS" SIGN_IDENTITY=-
-      - run: codesign --verify --deep --strict build/bin/tmx.app
+      - run: codesign --verify --deep --strict build/bin/tmxg.app

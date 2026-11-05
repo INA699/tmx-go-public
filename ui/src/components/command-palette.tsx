@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { CircleDot, FolderClosed, Gauge, Inbox, Keyboard, LayoutGrid, MessageCircle, MessageSquare, Moon, Plus, Settings, Sparkles, Square, Sun, Waypoints } from "lucide-react";
+import { CircleDot, FolderClosed, Gauge, Inbox, Keyboard, LayoutGrid, ListChecks, MessageCircle, MessageSquare, Moon, Plus, Settings, Sparkles, Square, Sun, Waypoints } from "lucide-react";
 import { useCompanionSetUp } from "@/lib/companion";
 import { isLinked, sortedWaChats, useWa } from "@/lib/whatsapp";
 import { WaAvatar } from "./whatsapp/wa-bits";
@@ -74,6 +74,9 @@ export function CommandPalette() {
           )}
           <CommandItem value="usage ai accounts quota limits connect claude codex antigravity" onSelect={() => go(paths.usage())}>
             <Gauge /> Usage
+          </CommandItem>
+          <CommandItem value="features ordered status works partial missing evidence" onSelect={() => go(paths.features())}>
+            <ListChecks /> Features
           </CommandItem>
           {wa && (
             <CommandItem value="whatsapp chats messages link" onSelect={() => go(paths.whatsapp())}>

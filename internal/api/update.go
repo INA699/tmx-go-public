@@ -97,9 +97,9 @@ func (s *Server) putUpdate(w http.ResponseWriter, r *http.Request) {
 	if req.Channel != nil {
 		switch *req.Channel {
 		case config.ChannelStable:
-			what = append(what, "take updates from stable releases")
+			what = append(what, "take updates from stable fleet releases")
 		case config.ChannelLatest:
-			what = append(what, "take updates from releases including prereleases")
+			what = append(what, "take updates from fleet releases including prereleases")
 		default: // refused before anyone is asked
 			writeError(w, http.StatusBadRequest, `the channel is "stable" or "latest"`)
 			return
@@ -125,7 +125,7 @@ func (s *Server) checkUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/update/install {now, tag?}: downloads and installs the newest release, or exactly
-// tag (a published v* release on this channel, newer than the running version; checked
+// tag (a published fleet release on this channel, newer than the running version; checked
 // before answering: 409 if not); now = without waiting for the agents to be idle (a turn in
 // progress is cut off). Gated. Progress: GET or the "update.status" event.
 func (s *Server) installUpdate(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +139,7 @@ func (s *Server) installUpdate(w http.ResponseWriter, r *http.Request) {
 	what := "the newest release"
 	if req.Tag != "" {
 		if v, ok := update.ParseVersion(req.Tag); !ok || v.Ahead != 0 {
-			writeError(w, http.StatusBadRequest, "not a release tag (vX.Y.Z or vX.Y.Z-rcN): "+req.Tag)
+			writeError(w, http.StatusBadRequest, "not a fleet release tag: "+req.Tag)
 			return
 		}
 		what = "the release " + req.Tag
@@ -190,18 +190,17 @@ func (s *Server) putUpdateToken(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.updater.Status())
 }
 
-// GET /api/update/keys: the built-in release keys, the pinned extra keys (public keys only), the
-// require policy and the last applied rotation serial.
+// GET /api/update/keys: the pinned release keys (public keys only), the require policy and the
+// last applied rotation serial.
 func (s *Server) getUpdateKeys(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.updater.Keys())
 }
 
-// PUT /api/update/keys {fleet_keys, require}: the owner pins extra release keys, trusted besides
-// the release keys built into tmx (DESIGN.md "Updates"), replacing the whole pinned set; an empty
-// set drops them all. Owner only (never a peer, agent or Companion), and it always needs a fresh
-// proof of the owner on this machine: also while the gate is off and inside the grace window, and
-// a daemon without a gate refuses it, since whoever can pin a key can install any binary. An
-// invalid set is refused before anyone is asked.
+// PUT /api/update/keys {fleet_keys, require}: the owner's re-pin (DESIGN.md "Updates", lost or
+// compromised key), replacing the whole set. It always needs a fresh proof of the owner on this
+// machine: also while the gate is off and inside the grace window, and a daemon without a gate
+// refuses it, since whoever can pin a key can install any binary. An invalid set is refused
+// before anyone is asked.
 func (s *Server) putUpdateKeys(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		FleetKeys []config.FleetKey `json:"fleet_keys"`
@@ -233,7 +232,7 @@ func (s *Server) putUpdateKeys(w http.ResponseWriter, r *http.Request) {
 		drop = append(drop, d)
 	}
 	sort.Strings(drop)
-	reason := "replace the extra keys updates are trusted with (besides the built-in release key): pin " + list(pin) + ", drop " + list(drop) + ", keep " + list(keep)
+	reason := "replace the keys updates are trusted with: pin " + list(pin) + ", drop " + list(drop) + ", keep " + list(keep)
 	if !s.requireOwner(w, r, gate.Action{Reason: reason, Key: actionKey(r, req), Always: true, Fresh: true}) {
 		return
 	}

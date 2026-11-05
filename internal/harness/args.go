@@ -73,7 +73,7 @@ func TerminalCommand(spec runner.Spec) (Command, error) {
 		}
 		if spec.MCP != nil {
 			env := envValues(spec.Env, spec.MCP.EnvKeys)
-			cfg["mcp"] = map[string]any{model.MCPServer: map[string]any{
+			cfg["mcp"] = map[string]any{"tmxg": map[string]any{
 				"type": "local", "command": append([]string{spec.MCP.Command}, spec.MCP.Args...),
 				"environment": env, "enabled": true,
 			}}
@@ -162,14 +162,16 @@ func CodexArgs(spec runner.Spec, launchID string) []string {
 	if instr != "" { // persisted as a developer message in the rollout
 		args = append(args, "-c", "developer_instructions="+tomlString(instr))
 	}
-	args = append(args, CodexMCPArgs(spec.MCP)...)
+	args = append(args, codexMCPArgs(spec.MCP, spec.CodexGuardHome == "")...)
 	return args
 }
 
 // CodexMCPArgs configures the tmx MCP server. Its secrets (the agent token) never go on the
 // command line, which every process listing shows: Codex forwards them from its own
 // environment by name (env_vars).
-func CodexMCPArgs(m *runner.MCPServer) []string {
+func CodexMCPArgs(m *runner.MCPServer) []string { return codexMCPArgs(m, true) }
+
+func codexMCPArgs(m *runner.MCPServer, disableLegacy bool) []string {
 	if m == nil {
 		return nil
 	}
@@ -178,15 +180,18 @@ func CodexMCPArgs(m *runner.MCPServer) []string {
 		quoted[i] = tomlString(a)
 	}
 	args := []string{
-		"-c", "mcp_servers.tmx.command=" + tomlString(m.Command),
-		"-c", "mcp_servers.tmx.args=[" + strings.Join(quoted, ", ") + "]",
+		"-c", "mcp_servers.tmxg.command=" + tomlString(m.Command),
+		"-c", "mcp_servers.tmxg.args=[" + strings.Join(quoted, ", ") + "]",
+	}
+	if disableLegacy {
+		args = append([]string{"-c", "mcp_servers.tmx.enabled=false"}, args...)
 	}
 	if len(m.EnvKeys) > 0 {
 		keys := make([]string, len(m.EnvKeys))
 		for i, k := range m.EnvKeys {
 			keys[i] = tomlString(k)
 		}
-		args = append(args, "-c", "mcp_servers.tmx.env_vars=["+strings.Join(keys, ", ")+"]")
+		args = append(args, "-c", "mcp_servers.tmxg.env_vars=["+strings.Join(keys, ", ")+"]")
 	}
 	return args
 }
@@ -331,6 +336,6 @@ func CodexAppServerArgs(spec runner.Spec) []string {
 	}
 	args = append(args, "-c", "sandbox_mode="+tomlString(sandbox), "-c", "approval_policy="+tomlString(approval))
 	args = append(args, CodexSandboxArgs(spec)...)
-	args = append(args, CodexMCPArgs(spec.MCP)...)
+	args = append(args, codexMCPArgs(spec.MCP, spec.CodexGuardHome == "")...)
 	return append(args, spec.ExtraArgs...)
 }

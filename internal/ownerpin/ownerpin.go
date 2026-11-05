@@ -1,17 +1,10 @@
-// Package ownerpin is the owner PIN: one short code for every owner step a browser takes, in
-// the same record format as the Python daemon's (src/tmx/gate.py, "the owner PIN").
+// Package ownerpin is the owner PIN: one short code, the same on every machine of the fleet
+// and the same record as the Python daemon's (src/tmx/gate.py, "the owner PIN"), so the owner
+// has ONE code. It replaces passkeys for every owner step a browser takes.
 //
 // Record (<TMX_HOME>/secrets/owner-pin.json): {"salt": 32 hex (16 bytes), "hash": 64 hex,
 // "set": unix seconds}. hash = scrypt(PIN as UTF-8, salt, N=16384, r=8, p=1, 32 bytes).
-// The record never leaves the machine: it is not synced between the fleet's machines (a
-// leaked salt+hash of a 6-digit PIN is brute-forced offline in minutes), so each machine's PIN
-// is set at that machine.
-//
-// Wrong PINs: each source (one paired device, one host's pairing browsers, the local UI) waits
-// after 5 wrong in a row; and all sources together share one count that no new source, cookie
-// or UI nonce resets and that survives a restart (<TMX_HOME>/secrets/owner-pin-tries.json):
-// from the 5th wrong PIN in a row, anywhere, every PIN waits 1 min, then 2, 4, ... up to 4 h.
-// The right PIN, or the owner at the machine (Clear wrong-PIN waits), resets it.
+// The newest "set" wins between machines. Wrong PINs slow a source down, never lock it out.
 package ownerpin
 
 import (
@@ -22,8 +15,6 @@ import (
 	"errors"
 	"math"
 	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -35,7 +26,7 @@ import (
 const (
 	scryptN, scryptR, scryptP, keyLen = 16384, 8, 1, 32
 	MinLen, MaxLen                    = 6, 12
-	// FutureSkew: a record set further ahead than this is not valid (Python: 300 s).
+	// FutureSkew: a synced record set further ahead than this is refused (Python: 300 s).
 	FutureSkew = 300 * time.Second
 	// Session and approval limits, the same as Python's.
 	SessionIdle = time.Hour
@@ -55,27 +46,6 @@ var (
 
 // MaxChecks bounds concurrent scrypt checks (about 16 MB each) across all sources.
 const MaxChecks = 4
-
-// The machine-wide lockout: GlobalFree wrong PINs in a row (from any source) are free; from
-// then on every try waits GlobalFirstWait, doubling with each further wrong PIN, up to
-// GlobalMaxWait. A 6-digit PIN then takes centuries to guess.
-const (
-	GlobalFree      = 5
-	GlobalFirstWait = time.Minute
-	GlobalMaxWait   = 4 * time.Hour
-)
-
-// globalWait is the lockout after n wrong PINs in a row (0 below GlobalFree).
-func globalWait(n int) time.Duration {
-	if n < GlobalFree {
-		return 0
-	}
-	d := GlobalFirstWait
-	for i := GlobalFree; i < n && d < GlobalMaxWait; i++ {
-		d *= 2
-	}
-	return min(d, GlobalMaxWait)
-}
 
 // Record is the stored PIN, field for field the Python record.
 type Record struct {
@@ -156,9 +126,6 @@ type Store struct {
 	err   error
 	Now   func() time.Time
 	fails map[string]*failure
-	// global is the machine-wide count (every source together), kept on disk at triesPath.
-	global    failure
-	triesPath string
 	// One check in flight per source, MaxChecks in all: parallel requests can't each get a
 	// guess before the count rises (review of #146), nor exhaust memory with scrypt.
 	inflight map[string]bool
@@ -169,21 +136,9 @@ type failure struct {
 	until time.Time
 }
 
-// triesFile is the machine-wide wrong-PIN count on disk.
-type triesFile struct {
-	Fails int   `json:"fails"`
-	Until int64 `json:"until"` // Unix ms; 0 = no wait
-}
-
-// TriesPath is where the machine-wide wrong-PIN count of the record at path is kept.
-func TriesPath(path string) string {
-	return filepath.Join(filepath.Dir(path), strings.TrimSuffix(filepath.Base(path), ".json")+"-tries.json")
-}
-
-// Open reads path (a missing file = no PIN yet) and the wrong-PIN count beside it.
+// Open reads path (a missing file = no PIN yet).
 func Open(path string) *Store {
-	s := &Store{path: path, Now: time.Now, fails: map[string]*failure{}, inflight: map[string]bool{}, triesPath: TriesPath(path)}
-	s.loadTries()
+	s := &Store{path: path, Now: time.Now, fails: map[string]*failure{}, inflight: map[string]bool{}}
 	b, err := os.ReadFile(path)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
@@ -242,65 +197,39 @@ func (s *Store) Set(pin string) (Record, error) {
 	return r, s.write(r)
 }
 
-// loadTries reads the machine-wide count. A file that can't be read or parsed fails closed:
-// it counts as GlobalFree wrong PINs (a wait), never as none.
-func (s *Store) loadTries() {
-	now := time.Now()
-	b, err := os.ReadFile(s.triesPath)
-	if errors.Is(err, os.ErrNotExist) {
-		return
+// Adopt takes a peer's record if it is well-formed and newer than ours.
+func (s *Store) Adopt(r Record) (bool, error) {
+	if !r.Valid(s.Now()) {
+		return false, ErrInvalid
 	}
-	var t triesFile
-	if err != nil || json.Unmarshal(b, &t) != nil || t.Fails < 0 {
-		s.global = failure{n: GlobalFree, until: now.Add(globalWait(GlobalFree))}
-		return
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.rec != nil && r.Set <= s.rec.Set {
+		return false, nil
 	}
-	s.global.n = t.Fails
-	if t.Until > 0 {
-		// A clock set back never makes the wait longer than the longest one.
-		s.global.until = time.UnixMilli(t.Until)
-		if lim := now.Add(GlobalMaxWait); s.global.until.After(lim) {
-			s.global.until = lim
-		}
-	}
+	return true, s.write(Record{Salt: r.Salt, Hash: r.Hash, Set: r.Set})
 }
 
-// saveTries writes the machine-wide count. Caller holds mu. A write error keeps the count in
-// memory (it still applies until the next restart).
-func (s *Store) saveTries() {
-	t := triesFile{Fails: s.global.n}
-	if !s.global.until.IsZero() {
-		t.Until = s.global.until.UnixMilli()
-	}
-	b, _ := json.Marshal(t)
-	_ = config.WriteSecretFile(s.triesPath, append(b, '\n'))
-}
-
-// Wait is how long source must wait before its next try (0 = now): its own wait or the
-// machine-wide one, whichever is longer.
+// Wait is how long source must wait before its next try (0 = now).
 func (s *Store) Wait(source string) time.Duration {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	now := s.Now()
-	d := s.global.until.Sub(now)
 	if f := s.fails[source]; f != nil {
-		d = max(d, f.until.Sub(now))
+		if d := f.until.Sub(s.Now()); d > 0 {
+			return d
+		}
 	}
-	return max(d, 0)
+	return 0
 }
 
-// Verify checks pin for source with the backoff. Per source: wrong #5..#9 wait 60 s, #10 on
-// 900 s each. Machine-wide: see GlobalFree. Never permanent. A right PIN clears the source and
-// the machine-wide count. A waiting caller gets a *WaitError and its PIN is not checked at all.
+// Verify checks pin for source with the backoff: wrong #5..#9 wait 60 s, #10 on 900 s each,
+// never permanent. A right PIN clears the source. A waiting source gets a *WaitError and its
+// PIN is not checked at all.
 func (s *Store) Verify(source, pin string) error {
 	s.mu.Lock()
 	rec, loadErr := s.rec, s.err
 	f := s.fails[source]
 	now := s.Now()
-	if now.Before(s.global.until) {
-		s.mu.Unlock()
-		return &WaitError{s.global.until.Sub(now)}
-	}
 	if f != nil && now.Before(f.until) {
 		s.mu.Unlock()
 		return &WaitError{f.until.Sub(now)}
@@ -312,10 +241,7 @@ func (s *Store) Verify(source, pin string) error {
 		}
 		return ErrNotSet
 	}
-	// Past the free tries, one check at a time machine-wide: each wrong PIN sets the wait
-	// before the next guess is checked, whichever source it comes from.
-	if s.inflight[source] || len(s.inflight) >= MaxChecks ||
-		len(s.inflight) > 0 && s.global.n+len(s.inflight) >= GlobalFree {
+	if s.inflight[source] || len(s.inflight) >= MaxChecks {
 		s.mu.Unlock()
 		return ErrBusy
 	}
@@ -327,17 +253,8 @@ func (s *Store) Verify(source, pin string) error {
 	delete(s.inflight, source)
 	if ok {
 		delete(s.fails, source)
-		if s.global.n > 0 || !s.global.until.IsZero() {
-			s.global = failure{}
-			s.saveTries()
-		}
 		return nil
 	}
-	s.global.n++
-	if d := globalWait(s.global.n); d > 0 {
-		s.global.until = s.Now().Add(d)
-	}
-	s.saveTries()
 	if s.fails[source] == nil {
 		if len(s.fails) >= 10000 { // bound memory: drop the expired ones
 			for k, v := range s.fails {
@@ -359,15 +276,8 @@ func (s *Store) Verify(source, pin string) error {
 	return ErrWrong
 }
 
-// ClearBackoff forgets every source's wrong tries and the machine-wide count (the owner at
-// the machine, or a new PIN set).
-func (s *Store) ClearBackoff() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.fails = map[string]*failure{}
-	s.global = failure{}
-	s.saveTries()
-}
+// ClearBackoff forgets every source's wrong tries (the owner at the machine).
+func (s *Store) ClearBackoff() { s.mu.Lock(); s.fails = map[string]*failure{}; s.mu.Unlock() }
 
 // WaitError: too many wrong PINs from this source; try again after Wait.
 type WaitError struct{ Wait time.Duration }

@@ -9,8 +9,8 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/guard"
 )
 
-// The hook takes the browser rule's state from the daemon on every call (the owner's rule
-// switches); a missing or broken answer means the strict built-in outcomes, never "anything goes".
+// The hook takes the browser rule's state from the daemon on every call (the owner's rule switches,
+// 3 Nov); a missing or broken answer means the strict built-in outcomes, never "anything goes".
 // Uses only an in-memory HTTP fixture, never apitest.New or daemon state/ACLs.
 func TestBrowserRuleFromTheDaemon(t *testing.T) {
 	const unsafe = "chrome.exe https://example.com"

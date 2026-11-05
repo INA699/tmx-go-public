@@ -258,7 +258,7 @@ export function DiscoverSection() {
       </Section>
 
       <Section
-        title="Running outside Tiamatrix"
+        title="Running outside tmx"
         right={
           <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => void scan()} disabled={scanning}>
             <RefreshCw className={scanning ? "animate-spin" : undefined} />

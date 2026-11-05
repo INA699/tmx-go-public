@@ -19,6 +19,3 @@ func createSecret(path string) (*os.File, error) {
 }
 
 func mkdirSecret(dir string) error { return os.MkdirAll(dir, 0o700) }
-
-// reprotectDir leaves an existing folder's mode alone, as before.
-func reprotectDir(string) error { return nil }

@@ -13,9 +13,7 @@ import (
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 )
 
-// The pinned extra release keys (DESIGN.md "Updates"): update.fleet_keys plus update.require. The
-// owner's release keys are built in (internal/update/keys.go) and trusted whatever is pinned here;
-// these are extra keys the owner chose to trust as well (none by default).
+// The pinned release key set (DESIGN.md "Updates"): update.fleet_keys plus update.require.
 
 // Fleet key types.
 const (
@@ -50,7 +48,7 @@ var (
 
 // PinnedKeys returns the effective pinned keys (fleet_keys, or the legacy fleet_public_key as one
 // ed25519 entry) and the require policy (default ["ed25519"]), validated. No keys is not an error:
-// only the owner's release keys are trusted then. Load does not call it: an invalid set must never stop the
+// updates then refuse every release. Load does not call it: an invalid set must never stop the
 // daemon, it only turns updates off (fail closed for updates only). u may be nil.
 func (u *UpdateConfig) PinnedKeys() ([]FleetKey, []string, error) {
 	if u == nil {
@@ -109,14 +107,18 @@ func (u *UpdateConfig) PinnedKeys() ([]FleetKey, []string, error) {
 
 // WithPins returns u with the pinned set replaced by keys and require (the owner's re-pin and a
 // signed rotation statement): the legacy fleet_public_key is dropped (it is part of the set the
-// new one replaces) and the result must be a valid set. An empty one drops every extra key.
+// new one replaces) and the result must be a valid, non-empty set.
 func (u UpdateConfig) WithPins(keys []FleetKey, require []string) (UpdateConfig, error) {
 	u.FleetKeys = append([]FleetKey(nil), keys...)
 	u.Require = append([]string(nil), require...)
 	u.FleetPublicKey = ""
 	u.rawKeys, u.rawRequire, u.shapeErr = nil, nil, nil
-	if _, _, err := u.PinnedKeys(); err != nil {
+	got, _, err := u.PinnedKeys()
+	if err != nil {
 		return UpdateConfig{}, err
+	}
+	if len(got) == 0 {
+		return UpdateConfig{}, errors.New("at least one fleet key must stay pinned")
 	}
 	return u, nil
 }

@@ -20,11 +20,11 @@ func Content() []byte {
 	return bytes.ReplaceAll(append([]byte(nil), content...), []byte("\r\n"), []byte("\n"))
 }
 
-// DefaultDir is where Claude Code finds user skills: ~/.claude/skills/tmx.
+// DefaultDir is where Claude Code finds user skills: ~/.claude/skills/tmxg.
 func DefaultDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".claude", "skills", "tmx"), nil
+	return filepath.Join(home, ".claude", "skills", "tmxg"), nil
 }

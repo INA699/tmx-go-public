@@ -13,16 +13,15 @@ import (
 	"github.com/blackcode-ch/tmx-go/internal/model"
 )
 
-// DefaultPort is the daemon's port (Python tmx uses 8777; never clash). A config.json that
-// names a port keeps it (builds named tmxg wrote 8797 there).
-const DefaultPort = 8787
+// DefaultPort isolates the trial from existing daemon installations.
+const DefaultPort = 8797
 
 // Profiles. "trial" is the side-by-side trial: local-only, every external service off.
 // "production" is a machine whose primary tmx is this daemon (DESIGN.md "Production profile"):
-// it may reach the Python fleet's daemons (Peers) and honours the owner's Companion, WhatsApp
-// and peer-to-peer switches (peer-to-peer, once enabled, with the DHT, mDNS and NAT port
-// mapping on unless config.json turns them off: EffectiveDHT, EffectiveMDNS). Automatic
-// updates stay off whatever config.json says: there is no signed release path yet (P1.22).
+// it may reach the Python fleet's daemons (Peers) and honours the owner's Companion and WhatsApp
+// switches, but peer-to-peer (libp2p, DHT, mDNS, NAT port mapping) and automatic updates stay
+// off in v1 whatever config.json says: the fleet's transport is the pair-token API, and there is
+// no signed release path yet (P1.22).
 const (
 	ProfileTrial      = "trial"
 	ProfileProduction = "production"
@@ -46,8 +45,8 @@ type Config struct {
 	Port          int       `json:"port"`
 	ClaudeCommand string    `json:"claude_command,omitempty"` // "" = claude on PATH
 	// SignInCommands are the executables the AI accounts' sign-in, sign-out and checks run for
-	// codex and agy ("codex", "antigravity"), when the one on PATH must not be used (a production
-	// start may put exit-78 stubs first so no Codex/agy agent starts); agents still
+	// codex and agy ("codex", "antigravity"), when the one on PATH must not be used (Hostb's
+	// production start puts exit-78 stubs first so no Codex/agy agent starts); agents still
 	// start whatever is on PATH. "" or missing = PATH.
 	SignInCommands map[string]string `json:"sign_in_commands,omitempty"`
 	HeadHarness    string            `json:"head_harness,omitempty"` // "" = claude, and an existing head keeps its harness; else claude or codex
@@ -66,20 +65,20 @@ type Config struct {
 	Hosts     []Host           `json:"hosts,omitempty"`     // other local daemons merged into Overview (hosts.go); nil = none
 	Peers     []Peer           `json:"peers,omitempty"`
 	// FleetAuthorities: "name@host" senders whose peer mail counts as the owner's standing order
-	// (internal/fleet/authority.go); nil or empty = none, only the owner's explicit list counts.
+	// (internal/fleet/authority.go); nil = the default (architect@hosta, tmx-lead@hosta).
 	FleetAuthorities []string `json:"fleet_authorities,omitempty"`
 	// AgentBypass: Claude agents guarded by tmx's hook run in bypass mode, so the guard alone
-	// decides what asks the owner (internal/fleet/guard.go); nil or false = Claude's prompts, true = bypass.
-	AgentBypass *bool `json:"agent_bypass,omitempty"`
+	// decides what asks the owner (internal/fleet/guard.go); nil = on, false = Claude's prompts.
+	AgentBypass *bool `json:"agent_bypass,omitempty"` // the Python fleet's other machines (peers.go); production only
 }
 
 // RecorderConfig is config.json "recorder" (DESIGN.md "Recorder"); zero fields take the defaults.
 type RecorderConfig struct {
 	VideoKbps      int `json:"video_kbps,omitempty"`      // screen video bitrate; 0 = 1500
 	FPS            int `json:"fps,omitempty"`             // screen frames per second; 0 = 15
-	MaxMinutes     int `json:"max_minutes,omitempty"`     // longest recording; 0 = no limit (only Stop ends it)
+	MaxMinutes     int `json:"max_minutes,omitempty"`     // longest recording; 0 = no limit (the owner, 2 Nov: "no time limit"; only his Stop ends it)
 	SegmentMB      int `json:"segment_mb,omitempty"`      // a new segment after this many MB; 0 = 20 (chat files take 25)
-	SegmentMinutes int `json:"segment_minutes,omitempty"` // … or after this many minutes; 0 = 5 (short parts: the report is ready soon after Stop)
+	SegmentMinutes int `json:"segment_minutes,omitempty"` // … or after this many minutes; 0 = 5 (the owner: "chunks of 5 min")
 }
 
 // Resolved returns the recorder settings with the defaults filled in (r may be nil).
@@ -110,17 +109,16 @@ func (r *RecorderConfig) Resolved() RecorderConfig {
 type UpdateConfig struct {
 	// Auto installs new releases by itself (once no agent is working); nil = false.
 	Auto *bool `json:"auto,omitempty"`
-	// Channel: "stable" (v* releases) or "latest" (also v* prereleases and release candidates).
+	// Channel: "stable" (fleet releases) or "latest" (also fleet prereleases).
 	Channel string `json:"channel,omitempty"`
 	// CheckHours between checks; 0 = 6.
 	CheckHours int `json:"check_hours,omitempty"`
 	// Repo the releases come from (owner/name); "" = blackcode-ch/tmx-go.
 	Repo string `json:"repo,omitempty"`
-	// FleetPublicKey is a base64 Ed25519 extra key (the pre-fleet_keys form, read as one
-	// ed25519 entry with id "fleet-release-v1"). The owner's release keys are built in.
+	// FleetPublicKey is the base64 Ed25519 fleet key (the pre-fleet_keys form, read as one
+	// ed25519 entry with id "fleet-release-v1"). Empty and no FleetKeys disables updates.
 	FleetPublicKey string `json:"fleet_public_key,omitempty"`
-	// FleetKeys are extra release keys the owner pinned (0-4 entries; DESIGN.md "Updates"),
-	// trusted besides the built-in owner keys. See fleetkeys.go.
+	// FleetKeys is the pinned release key set (1-4 entries; DESIGN.md "Updates"). See fleetkeys.go.
 	FleetKeys []FleetKey `json:"fleet_keys,omitempty"`
 	// Require lists the signature types a release must carry, each by a pinned key of that type;
 	// empty = ["ed25519"].
@@ -193,9 +191,9 @@ type P2PConfig struct {
 	NATPortMap *bool `json:"nat_port_map,omitempty"`
 	// Loopback lets invites carry 127.0.0.1 addresses (two daemons on one machine, tests).
 	Loopback bool `json:"loopback,omitempty"`
-	// ListenAddrs replaces the default QUIC+TCP listeners (every interface, IPv4 and IPv6, on
-	// the remembered port), e.g. ["/ip4/127.0.0.1/tcp/0"] for a node only reachable through
-	// relays. Empty = the default, which LAN (mDNS) and hole-punched connections need.
+	// ListenAddrs replaces the default QUIC+TCP listeners (127.0.0.1/::1 on the remembered
+	// port). "" = the default: never bind 0.0.0.0/:: without being asked - a wildcard bind
+	// triggers a Windows Firewall prompt, so the daemon never does that on its own.
 	ListenAddrs []string `json:"listen_addrs,omitempty"`
 	// DebugDrain makes the daemon itself consume pairings and envelopes into GET
 	// /api/p2p/net/log. Only for testing the network layer without the chat layer.
@@ -211,16 +209,16 @@ func (p *P2PConfig) MDNSOn() bool       { return p != nil && p.MDNS != nil && *p
 func (p *P2PConfig) NATPortMapOn() bool { return p != nil && p.NATPortMap != nil && *p.NATPortMap }
 
 // EffectiveDHT is what the daemon actually starts with - not DHTOn's bare on-disk value.
-// Production p2p (DESIGN.md "Peer-to-peer network") joins the public DHT in client mode (it
-// finds relays and contacts whose address changed, and starts AutoRelay/AutoNATv2)
+// Production p2p (DESIGN.md "Peer-to-peer network") joins the public DHT (outbound only:
+// AutoRelay/AutoNATv2, host.go:238 - no inbound listener, no NATPortMap, no firewall prompt)
 // UNLESS the owner explicitly chose otherwise (P2PConfig.DHTExplicit, set only by PUT
 // /api/p2p/config, a real owner+PIN action). Without this, a machine with p2p.enabled=true and
 // an on-disk "dht":false left over from older fillDefaults code (cfc7be0/PR #176, before
-// production honoured the field at all) would never engage
+// production honoured the field at all - exactly Hostb's config, 3 Nov) would never engage
 // relay/hole-punching: a peer ID nobody behind NAT can reach, and no invite carries a usable
 // address. Checked at daemon start (cli/p2p_node.go's startP2P), so an already-written
 // config.json self-corrects on its very next restart - no agent write to config.json needed
-// (the guard refuses that), and no action from the owner either.
+// (Hostb's guard correctly refuses that), and no action from the owner either.
 func (c Config) EffectiveDHT() bool {
 	if !c.Production() || !c.P2P.On() {
 		return c.P2P.DHTOn()
@@ -230,27 +228,6 @@ func (c Config) EffectiveDHT() bool {
 	}
 	return true
 }
-
-// EffectiveMDNS and EffectiveNATPortMap are what the daemon starts with. Where peer-to-peer
-// runs (production, enabled) both default on, as the DHT does and as in 0c36197: mDNS finds
-// paired peers on the LAN (the node still announces itself only while it has one) and the
-// router mapping lets peers connect directly instead of through a relay. An explicit false
-// is respected, except in a block older fillDefaults code wrote (staleOff).
-func (c Config) EffectiveMDNS() bool       { return c.p2pDefaultOn(c.P2P.MDNS) }
-func (c Config) EffectiveNATPortMap() bool { return c.p2pDefaultOn(c.P2P.NATPortMap) }
-
-func (c Config) p2pDefaultOn(v *bool) bool {
-	if !c.Production() || !c.P2P.On() {
-		return v != nil && *v
-	}
-	return v == nil || *v || c.P2P.staleOff()
-}
-
-// staleOff reports whether the p2p block still holds the all-false values that older
-// fillDefaults code wrote to config.json (enabled, dht, mdns and nat_port_map, bf1bcd7 and
-// cfc7be0): a "dht": false the owner did not choose (DHTExplicit, see EffectiveDHT) is
-// their mark, and the "mdns" and "nat_port_map" beside it are just as stale.
-func (p *P2PConfig) staleOff() bool { return p.DHT != nil && !*p.DHT && !p.DHTExplicit }
 
 // EffectivePolicy returns the override from config.json, else the default policy.
 func (c Config) EffectivePolicy() model.Policy {
@@ -307,7 +284,7 @@ func Load(p Paths) (Config, error) {
 		return c, fmt.Errorf("port must be between 1 and 65535")
 	}
 	if !ValidListenPort(c.Port) {
-		return c, fmt.Errorf("port %d is reserved for other installations (8777 Python tmx, 43911, 4001); choose another port", c.Port)
+		return c, fmt.Errorf("port %d is reserved for existing installations (8777 Python tmx, 8787 tmx-go v0.1, 43911, 4001); choose another port", c.Port)
 	}
 	if missing {
 		return c, Save(p, stored)
@@ -330,9 +307,9 @@ func (c *Config) fillDefaults() {
 	}
 	// Automatic updates stay off everywhere (no signed release path yet); the trial also stays
 	// local-only (no WhatsApp, no Companion, no Peers, no peer-to-peer), including when loading
-	// an older config. In production, config.json decides peer-to-peer: the
-	// pair-token transport doesn't cover person-to-person contacts/chats, which is what
-	// peer-to-peer is for (the "no signed release" reasoning is about auto-update, not this).
+	// an older config. In production, config.json decides peer-to-peer (the owner, 3 Nov 15:47:
+	// the pair-token transport doesn't cover person-to-person contacts/chats, which is what
+	// peer-to-peer is for; the "no signed release" reasoning was about auto-update, not this).
 	off := func() *bool { v := false; return &v }
 	if c.P2P == nil {
 		c.P2P = &P2PConfig{}

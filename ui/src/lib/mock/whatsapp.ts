@@ -414,7 +414,7 @@ export class MockWhatsApp {
     if (!this.ask || !this.chats.has(crew)) return;
     const text = "I have 10 quickdraws and a 70 m rope, I'll bring both.";
     const d = await this.ask(this.headId(), {
-      tool: "mcp__tmx__whatsapp_send",
+      tool: "mcp__tmxg__whatsapp_send",
       input: { chat: crew, chat_name: "Climbing crew", text },
       description: "Send a WhatsApp message to Climbing crew",
     });

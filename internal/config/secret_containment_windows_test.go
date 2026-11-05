@@ -21,63 +21,23 @@ func daclSnapshot(t *testing.T, path string) string {
 	return sd.String()
 }
 
-// An older version's secrets folder (an inherited, wide ACL) is made private on the next start,
-// and the secrets in it that only inherited their ACL take the new entries, staying readable to
-// the user (as at 0c36197; #75 had dropped it).
-func TestSecretsExistingFolderReprotected(t *testing.T) {
-	p := Paths{Home: t.TempDir()}
-	if err := os.Mkdir(p.SecretsDir(), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	setDACL(t, p.SecretsDir(), "D:(A;OICI;FA;;;WD)")
-	if err := os.WriteFile(p.OwnerTokenFile(), []byte("old-token\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := p.Ensure(); err != nil {
-		t.Fatal(err)
-	}
-	assertPrivate(t, p.SecretsDir(), true, false)
-	assertPrivate(t, p.OwnerTokenFile(), false, false)
-	if tok, err := ReadOwnerToken(p); err != nil || tok != "old-token" {
-		t.Fatalf("old token after re-protecting: %q, %v", tok, err)
-	}
-	before := daclSnapshot(t, p.SecretsDir())
-	if err := MkdirSecret(p.SecretsDir()); err != nil { // already private: nothing to do
-		t.Fatal(err)
-	}
-	if got := daclSnapshot(t, p.SecretsDir()); got != before {
-		t.Fatalf("a private folder was changed: %s -> %s", before, got)
-	}
-}
-
-// A secrets folder with a junction inside is left as it is (the new entries would be passed down
-// through it), and so is what the junction points at.
-func TestSecretsReprotectSkipsLinkInside(t *testing.T) {
-	dir, target := t.TempDir(), t.TempDir()
+func TestSecretsExistingDACLUnchanged(t *testing.T) {
+	dir := t.TempDir()
 	setDACL(t, dir, "D:(A;OICI;FA;;;WD)")
-	setDACL(t, target, "D:(A;OICI;FA;;;WD)")
-	link := filepath.Join(dir, "junction")
-	cmd := hiddenexec.Command("cmd.exe", "/d", "/c", "mklink", "/J", link, target)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("temp junction: %v: %s", err, out)
-	}
-	t.Cleanup(func() {
-		if err := os.Remove(link); err != nil {
-			t.Error(err)
-		}
-	})
-	before, targetBefore := daclSnapshot(t, dir), daclSnapshot(t, target)
-	if err := MkdirSecret(dir); err != nil { // best effort: the folder itself is a plain one
+	child := filepath.Join(dir, "legacy")
+	if err := os.WriteFile(child, []byte("fixture"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := reprotectDir(dir); err == nil {
-		t.Error("re-protected a folder with a junction inside")
+	childBefore := daclSnapshot(t, child)
+	before := daclSnapshot(t, dir)
+	if err := MkdirSecret(dir); err != nil {
+		t.Fatal(err)
 	}
 	if got := daclSnapshot(t, dir); got != before {
-		t.Errorf("folder DACL changed: %s -> %s", before, got)
+		t.Fatalf("existing DACL changed: %s -> %s", before, got)
 	}
-	if got := daclSnapshot(t, target); got != targetBefore {
-		t.Errorf("junction target DACL changed: %s -> %s", targetBefore, got)
+	if got := daclSnapshot(t, child); got != childBefore {
+		t.Error("existing child DACL changed")
 	}
 }
 

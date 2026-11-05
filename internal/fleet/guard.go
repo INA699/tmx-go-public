@@ -203,8 +203,19 @@ func (f *Fleet) Hold(c Caller, req HoldRequest) (model.Approval, error) {
 			Meta: map[string]any{"guard": info, "approval_id": ap.ID, "decision": string(model.ApprovalAllowed), "always_id": al.ID}})
 		return ap, nil
 	}
-	// A call the owner allowed once still waits for the owner: the card comes up again and only
-	// the PIN is skipped (AllowedBefore, api/safety.go). Never asking again is Allow always.
+	if at, ok := f.allowedAtLocked(guard.AllowedKey(info.Rule, info.Tool, info.Command, info.Cwd, key)); ok && guard.Rememberable[info.Rule] {
+		// "The same thing never asks twice" (the owner, 3 Nov 22:30): allowed once, allowed again.
+		ap := model.Approval{ID: model.NewID(), AgentID: r.a.ID, Kind: model.ApprovalGuard, Tool: req.Tool,
+			Input: raw, Description: info.Detail, Options: []string{}, State: model.ApprovalAllowed,
+			Answer: AnswerSame, CreatedAt: model.Now()}
+		if err := f.st.PutApproval(ap); err != nil {
+			return model.Approval{}, err
+		}
+		f.appendLocked(r, model.TimelineEntry{Kind: model.EntrySystem, Tool: req.Tool,
+			Text: "Allowed: same as approved " + dayOf(at) + ": " + info.RuleName,
+			Meta: map[string]any{"guard": info, "approval_id": ap.ID, "decision": string(model.ApprovalAllowed), "same_as": at}})
+		return ap, nil
+	}
 	ap := model.Approval{ID: model.NewID(), AgentID: r.a.ID, Kind: model.ApprovalGuard, Tool: req.Tool,
 		Input: raw, Description: info.Detail, Options: []string{}, State: model.ApprovalPending, CreatedAt: model.Now()}
 	if err := f.st.PutApproval(ap); err != nil {
@@ -557,9 +568,10 @@ func (f *Fleet) guardSpecLocked(r *agentRec, spec *runner.Spec) error {
 		"hooks": []any{map[string]any{"type": "command", "command": HookCommand(f.opts.Executable),
 			"timeout": int(hookTimeout / time.Second)}},
 	}}}}
-	// Only when the owner opted in (config.json "agent_bypass": true): with the guard hook
-	// installed, a Claude agent on the default mode ("auto") runs in bypass mode, like the Python
-	// fleet, and the hook alone decides what reaches the owner. Unset keeps Claude's own prompts.
+	// The owner, 3 Nov 13:54: no per-tool "allow once" prompts. With the guard hook installed, a
+	// Claude agent on the default mode ("auto") runs in bypass mode, like the Python fleet: the
+	// hook alone decides what reaches the owner (only machine-protection holds become cards).
+	// config.json "agent_bypass": false keeps Claude's own prompts.
 	if a.Harness == model.HarnessClaude && spec.PermissionMode == "auto" && f.agentBypass() {
 		spec.PermissionMode = "bypassPermissions"
 		cfg["skipDangerousModePermissionPrompt"] = true
@@ -641,6 +653,32 @@ func appendRuleLog(log []guard.RuleChange, ch ...guard.RuleChange) []guard.RuleC
 		out = out[len(out)-guard.RuleLogMax:]
 	}
 	return out
+}
+
+// applyRuleDefaultsLocked: the first start with rule switches logs, once, every rule whose
+// default differs from what this install did before (the strict built-in outcome). Existing
+// installs thereby move to the defaults of the owner's brief, visibly.
+func (f *Fleet) applyRuleDefaultsLocked() {
+	s := f.safetyLocked().settings
+	if s.DefaultsVersion >= guard.DefaultsVersion {
+		return
+	}
+	at := time.Now().UTC().Format(time.RFC3339)
+	var ch []guard.RuleChange
+	for _, r := range guard.Rules() {
+		if _, set := s.RuleStates[r.ID]; !set && r.Default != r.Outcome {
+			ch = append(ch, guard.RuleChange{Rule: r.ID, Old: r.Outcome, New: r.Default, At: at, By: "tmx"})
+		}
+	}
+	s.RuleLog = appendRuleLog(s.RuleLog, ch...)
+	s.DefaultsVersion = guard.DefaultsVersion
+	if err := f.saveGuardLocked(s); err != nil {
+		f.log.Warn("guard: cannot record the rule defaults", "err", err)
+		return
+	}
+	if len(ch) > 0 {
+		f.log.Info("guard: rule defaults applied", "changed", len(ch))
+	}
 }
 
 // HookCommand is the hook's command line, quoted for the shell Claude Code runs hooks with.

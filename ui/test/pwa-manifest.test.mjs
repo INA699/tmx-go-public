@@ -32,10 +32,13 @@ test('manifest.webmanifest declares name, standalone display, and a maskable ico
   }
 });
 
-// One mark everywhere: the favicon is the app icon's source, and no other logo is left behind.
-test('the favicon is the app icon source', () => {
-  const favicon = readFileSync(new URL('../public/favicon.svg', import.meta.url), 'utf8');
-  const appicon = readFileSync(new URL('../../build/appicon.svg', import.meta.url), 'utf8');
-  assert.equal(favicon, appicon);
-  assert.ok(!existsSync(new URL('../public/brand/header-mark.svg', import.meta.url)), 'the Pocket dragon header mark is still there');
+// The owner, 3 Nov: the grid logo is out; the Pocket dragon (Tiamat) is the mark everywhere: the
+// header, the favicon and the app icons, the exact assets of the Python dashboard's Tiamatrix design.
+test('the favicon, the app icon source and the header mark are the Pocket dragon', () => {
+  const dragon = 'M12 12L20 12L20 20L28 20L28 12L36 12L36 20L44 20L44 12L52 12L52 28L60 28L60 36L52 36L52 44L36 44L36 52L44 52L44 60L20 60L20 52L12 52L12 44L4 44L4 28L12 28L12 36L20 36L20 44L28 44L28 36L20 36L20 28L12 28Z';
+  for (const f of ['../public/favicon.svg', '../public/brand/header-mark.svg', '../../build/appicon.svg']) {
+    const svg = readFileSync(new URL(f, import.meta.url), 'utf8');
+    assert.ok(svg.includes(dragon), `${f} is not the Pocket dragon`);
+    assert.ok(!svg.includes('M1 1H5V5H1Z'), `${f} still has the grid (living cell)`);
+  }
 });
