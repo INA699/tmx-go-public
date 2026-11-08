@@ -38,6 +38,8 @@ jobs:
           node-version: '24'
       - run: pnpm --dir ui install --frozen-lockfile
       - run: pnpm --dir ui build
+      - name: Print UI SHA-256 manifest for signer rebuild comparison
+        run: node ui/scripts/dist-manifest.mjs
       - name: Build four platforms and checksums (no signing key)
         env:
           RELEASE_TAG: ${{ inputs.tag }}
