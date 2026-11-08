@@ -1,0 +1,20 @@
+name: macOS installer fixtures
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  installer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: ShellCheck
+        run: shellcheck scripts/install-macos.sh scripts/test-install-macos.sh
+      - name: Signed release fixtures (no Mac required)
+        run: bash scripts/test-install-macos.sh
